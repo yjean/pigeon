@@ -116,3 +116,24 @@ func TestDroppedPaths(t *testing.T) {
 		t.Errorf("unescaped path: %v", got)
 	}
 }
+
+func TestQuitAsksFirst(t *testing.T) {
+	isQuit := func(cmd tea.Cmd) bool {
+		if cmd == nil {
+			return false
+		}
+		_, ok := cmd().(tea.QuitMsg)
+		return ok
+	}
+	m := &Model{accts: []*account{{box: inbox}}}
+	if isQuit(m.onKey("q")) || !m.confirmQuit {
+		t.Fatal("q should ask for confirmation, not quit")
+	}
+	if isQuit(m.onKey("esc")) || m.confirmQuit {
+		t.Fatal("another key should cancel")
+	}
+	m.onKey("q")
+	if !isQuit(m.onKey("q")) {
+		t.Fatal("q q should quit")
+	}
+}

@@ -139,6 +139,8 @@ type Model struct {
 
 	flash    string // transient status message
 	flashErr bool
+
+	confirmQuit bool // q pressed: q or y quits, any other key cancels
 	flashSeq int
 
 	w, h     int
@@ -425,6 +427,13 @@ func (m *Model) onKey(key string) tea.Cmd {
 		}
 		return nil
 	}
+	if m.confirmQuit {
+		m.confirmQuit = false
+		if key == "q" || key == "y" {
+			return tea.Quit
+		}
+		return nil
+	}
 	if m.pendingG {
 		m.pendingG = false
 		if key == "g" {
@@ -519,7 +528,8 @@ func (m *Model) onKey(key string) tea.Cmd {
 			return m.exitSearch()
 		}
 	case "q":
-		return tea.Quit
+		m.confirmQuit = true
+		return nil
 	case "j", "down":
 		return m.moveTo(a.sel + 1)
 	case "k", "up":

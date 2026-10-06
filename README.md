@@ -18,7 +18,7 @@ A fast, keyboard-driven Gmail client for the terminal, inspired by [slk](https:/
 - [x] TUI: account rail, thread list, reading pane, status bar
 - [x] Disk cache: instant startup, incremental sync (by thread historyId), prefetch
 - [x] Compose / reply / reply all / forward (in-app editor or `$EDITOR`), save drafts
-- [x] Attachments: attach files (`ctrl+a` browser or drag & drop), forward with attachments
+- [x] Attachments: attach files (`ctrl+a` browser or drag & drop), forward with attachments; 📎 on list rows
 - [x] Archive / trash / star / mark unread, with undo
 - [ ] Labels sidebar
 - [x] Search (`/`, Gmail search syntax)
@@ -87,8 +87,13 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
 | `U` | toggle unread only / all conversations (the inbox starts unread-only) |
 | `ctrl+r` | sync now (changes also arrive within ~10 s); drops conversations read meanwhile from the unread view |
 | `?` | help |
+| `q` `q` / `ctrl+c` | quit (`q` asks first: `q` or `y` confirms, any other key stays) |
 
 ## Design notes
+
+- **Attachment clip**: the 📎 in front of a list row is guessed from each message's top-level
+  MIME type (`multipart/mixed`), the only hint in Gmail's cheap `metadata` format; a rare
+  message without a real file (some calendar invites) can show it too.
 
 - **Theme**: Catppuccin Mocha (`internal/tui/theme.go`), colors mapped to the Catppuccin
   style guide roles; modes match LazyVim's lualine (NORMAL blue, INSERT green, READ mauve).

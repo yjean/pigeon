@@ -343,6 +343,8 @@ func (m *Model) renderStatus() string {
 
 	var right string
 	switch {
+	case m.confirmQuit:
+		right = fg(cWarn).Render("Quit pigeon? q/y to quit, any other key to stay")
 	case m.flash != "":
 		c := cOK
 		if m.flashErr {
@@ -396,7 +398,7 @@ func helpLines() []string {
 		{"  esc", "  leave the search results"},
 		{"ctrl+r", "sync now"},
 		{"?", "toggle this help"},
-		{"q  ctrl+c", "quit"},
+		{"q / ctrl+c", "quit (q asks first: q or y to confirm)"},
 	}
 	out := make([]string, len(rows))
 	for i, r := range rows {
