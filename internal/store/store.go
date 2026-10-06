@@ -141,23 +141,70 @@ func (a *Account) Thread(ctx context.Context, id, historyID string) (*gmail.Thre
 	return full, nil
 }
 
-// MarkRead removes UNREAD from every message of the thread.
-func (a *Account) MarkRead(ctx context.Context, id string) error {
+// Modify adds/removes labels on a thread.
+func (a *Account) Modify(ctx context.Context, id string, add, remove []string) error {
 	c, err := a.Client(ctx)
 	if err != nil {
 		return err
 	}
-	if err := c.ModifyThread(ctx, id, nil, []string{"UNREAD"}); err != nil {
+	if err := c.ModifyThread(ctx, id, add, remove); err != nil {
 		return err
 	}
+	a.invalidate(id)
+	return nil
+}
+
+// Trash moves a thread to the trash. Gmail drops the INBOX label when
+// trashing (and untrash does not restore it), so it reports whether the
+// thread was in the inbox, for Untrash.
+func (a *Account) Trash(ctx context.Context, id string) (wasInbox bool, err error) {
+	c, err := a.Client(ctx)
+	if err != nil {
+		return false, err
+	}
+	if t, err := c.GetThread(ctx, id, false); err == nil {
+		for _, m := range t.Messages {
+			wasInbox = wasInbox || m.HasLabel("INBOX")
+		}
+	}
+	if err := c.TrashThread(ctx, id); err != nil {
+		return wasInbox, err
+	}
+	a.invalidate(id)
+	return wasInbox, nil
+}
+
+// Untrash restores a thread from the trash, back into the inbox if toInbox.
+func (a *Account) Untrash(ctx context.Context, id string, toInbox bool) error {
+	c, err := a.Client(ctx)
+	if err != nil {
+		return err
+	}
+	if err := c.UntrashThread(ctx, id); err != nil {
+		return err
+	}
+	if toInbox {
+		if err := c.ModifyThread(ctx, id, []string{"INBOX"}, nil); err != nil {
+			return err
+		}
+	}
+	a.invalidate(id)
+	return nil
+}
+
+// invalidate forces the thread summary to be re-fetched on the next sync.
+func (a *Account) invalidate(id string) {
 	a.mu.Lock()
+	defer a.mu.Unlock()
 	if s, ok := a.summaries[id]; ok {
-		s.Unread = false
-		s.HistoryID = "" // force a re-fetch of the summary on next sync
+		s.HistoryID = ""
 		a.summaries[id] = s
 	}
-	a.mu.Unlock()
-	return nil
+}
+
+// SaveCachedList persists a locally modified list so a restart shows it as is.
+func (a *Account) SaveCachedList(label string, list []gmail.Summary) {
+	a.writeJSON(listFile(label), list)
 }
 
 // remember indexes summaries. Cached (possibly stale) lists never overwrite

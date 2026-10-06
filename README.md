@@ -18,7 +18,8 @@ A fast, keyboard-driven Gmail client for the terminal, inspired by [slk](https:/
 - [x] TUI: account rail, thread list, reading pane, status bar
 - [x] Disk cache: instant startup, incremental sync (by thread historyId), prefetch
 - [x] Compose / reply / reply all / forward (in-app editor or `$EDITOR`), save drafts
-- [ ] Archive / trash / star / labels sidebar
+- [x] Archive / trash / star / mark unread, with undo
+- [ ] Labels sidebar
 - [ ] Search
 - [ ] Push-style sync (Gmail history API) instead of 60 s polling
 
@@ -66,6 +67,9 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
 | `space`, `ctrl+d` / `ctrl+u` | scroll the conversation |
 | `1`–`9`, `[` / `]` | switch account |
 | `gi` `gs` `gt` `gd` `ga` | inbox, starred, sent, drafts, all mail |
+| `e` / `#` | archive / move to trash |
+| `s` / `u` | star / mark unread (toggles) |
+| `z` | undo the last archive / trash |
 | `c` | compose a new message |
 | `r` / `a` / `f` | reply / reply all / forward the open conversation |
 | `ctrl+enter` / `ctrl+s` | send (in compose; ctrl+enter needs Ghostty, kitty, WezTerm…) |

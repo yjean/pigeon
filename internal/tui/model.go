@@ -48,7 +48,8 @@ type account struct {
 	threads  []gmail.Summary
 	sel, top int
 	loaded   bool
-	syncing  map[string]bool // by label
+	syncing  map[string]bool      // by label
+	hidden   map[string]time.Time // optimistically removed thread IDs
 	err      error
 	lastSync time.Time
 }
@@ -84,6 +85,7 @@ type Model struct {
 	threadCache map[string]*gmail.Thread // "email|threadID"
 
 	composer *composer
+	lastUndo *undoable
 
 	flash    string // transient status message
 	flashErr bool
@@ -107,10 +109,6 @@ type (
 		thread *gmail.Thread
 		err    error
 	}
-	markedMsg struct {
-		acct int
-		err  error
-	}
 	openTick struct{ seq int }
 	syncTick struct{}
 )
@@ -124,7 +122,7 @@ func Run(accounts []config.Account) error {
 		if err != nil {
 			return err
 		}
-		ac := &account{store: st, badge: badges[i], box: inbox, syncing: map[string]bool{}}
+		ac := &account{store: st, badge: badges[i], box: inbox, syncing: map[string]bool{}, hidden: map[string]time.Time{}}
 		ac.threads = st.CachedList(ac.box.label) // instant first paint from disk
 		ac.loaded = ac.threads != nil
 		m.accts = append(m.accts, ac)
@@ -263,7 +261,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if s := a.selected(); s != nil {
 			selID = s.ID
 		}
-		a.threads, a.loaded = msg.threads, true
+		a.threads, a.loaded = a.visible(msg.threads), true
 		if i := slices.IndexFunc(a.threads, func(s gmail.Summary) bool { return s.ID == selID }); i >= 0 {
 			a.sel = i
 		}
@@ -295,10 +293,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.prefetch(m.cur, m.acct().sel+1, 2)
 		}
 
-	case markedMsg:
-		if msg.err != nil {
-			m.accts[msg.acct].err = msg.err
-		}
+	case actionMsg:
+		return m, m.onAction(msg)
 
 	case syncTick:
 		cmds := []tea.Cmd{tea.Tick(syncEvery, func(time.Time) tea.Msg { return syncTick{} })}
@@ -359,6 +355,16 @@ func (m *Model) onKey(key string) tea.Cmd {
 		return m.sync(m.cur)
 	case "c", "r", "a", "f":
 		return m.startCompose(key)
+	case "e":
+		return m.act("archive")
+	case "#":
+		return m.act("trash")
+	case "s":
+		return m.act("star")
+	case "u":
+		return m.act("unread")
+	case "z":
+		return m.undo()
 	case "g":
 		m.pendingG = true
 		return nil
@@ -427,12 +433,9 @@ func (m *Model) openReader() tea.Cmd {
 		return nil
 	}
 	s.Unread = false
-	idx, id, st := m.cur, s.ID, a.store
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		return markedMsg{acct: idx, err: st.MarkRead(ctx, id)}
-	}
+	id, st := s.ID, a.store
+	st.SaveCachedList(a.box.label, a.threads)
+	return m.background(m.cur, func(ctx context.Context) error { return st.Modify(ctx, id, nil, []string{"UNREAD"}) })
 }
 
 func (m *Model) switchAccount(i int) tea.Cmd {

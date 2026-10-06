@@ -94,6 +94,16 @@ func (c *Client) ModifyThread(ctx context.Context, id string, add, remove []stri
 	return c.do(ctx, http.MethodPost, "threads/"+url.PathEscape(id)+"/modify", nil, body, nil)
 }
 
+// TrashThread moves a thread to the trash.
+func (c *Client) TrashThread(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodPost, "threads/"+url.PathEscape(id)+"/trash", nil, nil, nil)
+}
+
+// UntrashThread restores a thread from the trash.
+func (c *Client) UntrashThread(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodPost, "threads/"+url.PathEscape(id)+"/untrash", nil, nil, nil)
+}
+
 // APIError is a non-2xx Gmail response.
 type APIError struct {
 	Status  int

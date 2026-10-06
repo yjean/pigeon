@@ -145,16 +145,20 @@ func renderRow(s gmail.Summary, w int, selected, focused bool) string {
 		}
 		lead = st(lipgloss.NewStyle().Foreground(c)).Render("▌")
 	}
-	dot := st(sBase).Render("  ")
+	dot := st(sBase).Render(" ")
 	if s.Unread {
-		dot = st(lipgloss.NewStyle().Foreground(cAccent)).Render("● ")
+		dot = st(lipgloss.NewStyle().Foreground(cAccent)).Render("●")
+	}
+	star := st(sBase).Render("  ")
+	if s.Starred {
+		star = st(lipgloss.NewStyle().Foreground(cYellow)).Render("★ ")
 	}
 
 	const dateW = 10
 	fromW := clamp(w/4, 12, 28)
-	restW := w - 3 - fromW - 1 - dateW
+	restW := w - 4 - fromW - 1 - dateW
 	if restW < 10 { // very narrow terminal: drop the sender column
-		fromW, restW = 0, w-3-dateW
+		fromW, restW = 0, w-4-dateW
 	}
 
 	sender := oneLine(s.From)
@@ -175,6 +179,7 @@ func renderRow(s gmail.Summary, w int, selected, focused bool) string {
 	var b strings.Builder
 	b.WriteString(lead)
 	b.WriteString(dot)
+	b.WriteString(star)
 	if fromW > 0 {
 		b.WriteString(st(from).Render(padRight(ansi.Truncate(sender, fromW, "…"), fromW)))
 		b.WriteString(st(sBase).Render(" "))
@@ -365,6 +370,9 @@ func helpLines() []string {
 		{"space  ctrl+d / ctrl+u", "scroll the conversation"},
 		{"1-9  [ / ]", "switch account"},
 		{"gi gs gt gd ga", "inbox, starred, sent, drafts, all mail"},
+		{"e / #", "archive / move to trash"},
+		{"s / u", "star / mark unread (toggles)"},
+		{"z", "undo archive / trash"},
 		{"c", "compose a new message"},
 		{"r / a / f", "reply / reply all / forward"},
 		{"  ctrl+enter", "  send (in compose; ctrl+s also works)"},
