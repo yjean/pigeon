@@ -213,7 +213,7 @@ func (m *Model) composeKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	switch key {
-	case "ctrl+s":
+	case "ctrl+enter", "ctrl+s": // ctrl+enter needs a terminal with the kitty keyboard protocol (Ghostty, kitty, WezTerm…)
 		return m.deliver(false)
 	case "esc", "ctrl+c":
 		if !c.modified() {
@@ -374,7 +374,7 @@ func (m *Model) renderComposer(w, h int) string {
 	case c.err != nil:
 		footer = lipgloss.NewStyle().Foreground(cRed).Render(" ✗ " + c.err.Error())
 	default:
-		footer = sDim.Render(" ctrl+s send · tab next field · ctrl+e edit in $EDITOR · esc close")
+		footer = sDim.Render(" ctrl+enter send · tab next field · ctrl+e edit in $EDITOR · esc close")
 	}
 	lines = append(lines, footer)
 

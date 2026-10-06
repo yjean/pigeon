@@ -68,7 +68,7 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
 | `gi` `gs` `gt` `gd` `ga` | inbox, starred, sent, drafts, all mail |
 | `c` | compose a new message |
 | `r` / `a` / `f` | reply / reply all / forward the open conversation |
-| `ctrl+s` | send (in compose) |
+| `ctrl+enter` / `ctrl+s` | send (in compose; ctrl+enter needs Ghostty, kitty, WezTerm…) |
 | `ctrl+e` | edit the body in `$EDITOR` (in compose) |
 | `tab` / `shift+tab` | next / previous field (in compose) |
 | `esc` | close compose: save draft, discard, or keep editing |

@@ -367,7 +367,7 @@ func helpLines() []string {
 		{"gi gs gt gd ga", "inbox, starred, sent, drafts, all mail"},
 		{"c", "compose a new message"},
 		{"r / a / f", "reply / reply all / forward"},
-		{"  ctrl+s", "  send (in compose)"},
+		{"  ctrl+enter", "  send (in compose; ctrl+s also works)"},
 		{"  ctrl+e", "  edit the body in $EDITOR"},
 		{"  tab / esc", "  next field / close (save draft or discard)"},
 		{"ctrl+r", "sync now"},
