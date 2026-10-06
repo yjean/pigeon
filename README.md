@@ -29,7 +29,8 @@ A fast, keyboard-driven Gmail client for the terminal, inspired by [slk](https:/
 ## Build
 
 ```sh
-go build -o pigeon . && mv pigeon /usr/local/bin/   # or: go install .
+make install      # tests, then builds to ~/.local/bin/pigeon (PREFIX=/usr/local to change)
+make uninstall    # removes the binary; config, Keychain tokens and cache are kept
 ```
 
 ## One-time setup: your own Google OAuth client

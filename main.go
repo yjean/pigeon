@@ -17,7 +17,8 @@ import (
 	"github.com/yoann/pigeon/internal/tui"
 )
 
-const version = "0.1.0-dev"
+// version is set at build time by the Makefile (git describe).
+var version = "dev"
 
 const usage = `pigeon 🐦 — Gmail in your terminal
 
