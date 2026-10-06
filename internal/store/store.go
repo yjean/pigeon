@@ -40,6 +40,9 @@ type Account struct {
 
 	mu        sync.Mutex
 	summaries map[string]gmail.Summary // by thread ID, across mailboxes
+
+	meOnce sync.Once
+	me     gmail.Address
 }
 
 func Open(email string) (*Account, error) {
@@ -180,4 +183,37 @@ func (a *Account) writeJSON(name string, v any) {
 	if data, err := json.Marshal(v); err == nil {
 		_ = config.WriteFileAtomic(filepath.Join(a.dir, name), data, 0o600)
 	}
+}
+
+// Me returns the account's sender identity (display name fetched once from Gmail).
+func (a *Account) Me(ctx context.Context) gmail.Address {
+	a.meOnce.Do(func() {
+		a.me = gmail.Address{Email: a.Email}
+		if c, err := a.Client(ctx); err == nil {
+			if name, err := c.DisplayName(ctx); err == nil {
+				a.me.Name = name
+			}
+		}
+	})
+	return a.me
+}
+
+// Send sends a message from this account.
+func (a *Account) Send(ctx context.Context, o gmail.Outgoing) error {
+	c, err := a.Client(ctx)
+	if err != nil {
+		return err
+	}
+	o.From = a.Me(ctx)
+	return c.Send(ctx, o)
+}
+
+// SaveDraft stores a message in this account's Drafts.
+func (a *Account) SaveDraft(ctx context.Context, o gmail.Outgoing) error {
+	c, err := a.Client(ctx)
+	if err != nil {
+		return err
+	}
+	o.From = a.Me(ctx)
+	return c.SaveDraft(ctx, o)
 }

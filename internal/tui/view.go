@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 	"time"
 
@@ -216,6 +217,9 @@ func (m *Model) refreshReader(reset bool) {
 }
 
 func (m *Model) renderReader(w, h int) string {
+	if m.composer != nil {
+		return m.renderComposer(w, h)
+	}
 	iw := w - 2
 	var lines []string
 	if m.help {
@@ -312,7 +316,10 @@ func renderThread(t *gmail.Thread, w int, me string) (string, int) {
 func (m *Model) renderStatus() string {
 	a := m.acct()
 	mode := sMode.Render(" NORMAL ")
-	if m.focus == focusReader {
+	switch {
+	case m.composer != nil:
+		mode = lipgloss.NewStyle().Foreground(cDark).Background(cYellow).Bold(true).Render(" INSERT ")
+	case m.focus == focusReader:
 		mode = sModeAlt.Render("  READ  ")
 	}
 	left := mode + " " + sBase.Render("● "+a.box.name) + sDim.Render(" · "+a.store.Email)
@@ -320,6 +327,12 @@ func (m *Model) renderStatus() string {
 
 	var right string
 	switch {
+	case m.flash != "":
+		c := cGreen
+		if m.flashErr {
+			c = cYellow
+		}
+		right = lipgloss.NewStyle().Foreground(c).Render(m.flash)
 	case a.err != nil:
 		right = lipgloss.NewStyle().Foreground(cRed).Render("✗ " + ansi.Truncate(a.err.Error(), max(m.w/3, 10), "…"))
 	case len(a.syncing) > 0:
@@ -352,7 +365,12 @@ func helpLines() []string {
 		{"space  ctrl+d / ctrl+u", "scroll the conversation"},
 		{"1-9  [ / ]", "switch account"},
 		{"gi gs gt gd ga", "inbox, starred, sent, drafts, all mail"},
-		{"r", "sync now"},
+		{"c", "compose a new message"},
+		{"r / a / f", "reply / reply all / forward"},
+		{"  ctrl+s", "  send (in compose)"},
+		{"  ctrl+e", "  edit the body in $EDITOR"},
+		{"  tab / esc", "  next field / close (save draft or discard)"},
+		{"ctrl+r", "sync now"},
 		{"?", "toggle this help"},
 		{"q  ctrl+c", "quit"},
 	}
@@ -367,6 +385,14 @@ func helpLines() []string {
 
 // pane draws a bordered box of exactly w×h cells around lines.
 func pane(lines []string, w, h int, focused bool) string {
+	c := cBorder
+	if focused {
+		c = cAccent
+	}
+	return paneColor(lines, w, h, c)
+}
+
+func paneColor(lines []string, w, h int, border color.Color) string {
 	iw, ih := w-2, h-2
 	out := make([]string, ih)
 	for i := range out {
@@ -376,11 +402,7 @@ func pane(lines []string, w, h int, focused bool) string {
 			out[i] = strings.Repeat(" ", iw)
 		}
 	}
-	c := cBorder
-	if focused {
-		c = cAccent
-	}
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(c).Render(strings.Join(out, "\n"))
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).Render(strings.Join(out, "\n"))
 }
 
 func scrollbar(offset, visible, total int) []string {

@@ -53,3 +53,49 @@ func TestSummarize(t *testing.T) {
 		t.Fatalf("got %+v", s)
 	}
 }
+
+func TestRawAndReply(t *testing.T) {
+	me := Address{Name: "Yoann", Email: "yoann@42.works"}
+	th := &Thread{ID: "T1", Messages: []Message{{
+		InternalDate: "1700000000000",
+		Payload: Part{Headers: []Header{
+			{"From", "Julian Doe <j@x.io>"}, {"To", "yoann@42.works, Damon <d@x.io>"}, {"Cc", "s@x.io"},
+			{"Subject", "Budget"}, {"Message-ID", "<abc@x.io>"}, {"References", "<root@x.io>"},
+		}},
+	}}}
+	th.Messages[0].Payload.MimeType = "text/plain"
+	th.Messages[0].Payload.Body.Data = base64.URLEncoding.EncodeToString([]byte("Hi Yoann"))
+
+	r := Reply(th, me, true)
+	if r.To != "Julian Doe <j@x.io>" || r.Cc != "Damon <d@x.io>, s@x.io" {
+		t.Fatalf("recipients: to=%q cc=%q", r.To, r.Cc)
+	}
+	if r.Subject != "Re: Budget" || r.InReplyTo != "<abc@x.io>" || r.References != "<root@x.io> <abc@x.io>" || r.ThreadID != "T1" {
+		t.Fatalf("headers: %+v", r)
+	}
+	if !strings.Contains(r.Body, "> Hi Yoann") {
+		t.Fatalf("quote missing: %q", r.Body)
+	}
+	if one := Reply(th, me, false); one.Cc != "" {
+		t.Fatalf("reply (not all) should have no cc: %q", one.Cc)
+	}
+
+	r.Body = "Ça marche, merci !\n\n" + r.Body
+	raw, err := r.Raw()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(raw)
+	for _, want := range []string{"From: \"Yoann\" <yoann@42.works>\r\n", "To: \"Julian Doe\" <j@x.io>\r\n", "Subject: Re: Budget\r\n",
+		"In-Reply-To: <abc@x.io>\r\n", "Content-Transfer-Encoding: quoted-printable", "=C3=87a marche"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("raw missing %q:\n%s", want, s)
+		}
+	}
+	if _, err := (Outgoing{From: me, To: "not an address"}).Raw(); err == nil {
+		t.Error("expected invalid recipient error")
+	}
+	if f := Forward(th, me); f.Subject != "Fwd: Budget" || f.To != "" || !strings.Contains(f.Body, "Forwarded message") {
+		t.Errorf("forward: %+v", f)
+	}
+}

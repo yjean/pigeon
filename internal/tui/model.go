@@ -83,6 +83,12 @@ type Model struct {
 	openErr     error
 	threadCache map[string]*gmail.Thread // "email|threadID"
 
+	composer *composer
+
+	flash    string // transient status message
+	flashErr bool
+	flashSeq int
+
 	w, h     int
 	pendingG bool
 	help     bool
@@ -223,9 +229,24 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
 		m.refreshReader(false)
+		m.sizeComposer()
 
 	case tea.KeyPressMsg:
+		if m.composer != nil {
+			return m, m.composeKey(msg)
+		}
 		return m, m.onKey(msg.String())
+
+	case sentMsg:
+		return m, m.onSent(msg)
+
+	case editorMsg:
+		return m, m.onEditorDone(msg)
+
+	case clearFlash:
+		if msg.seq == m.flashSeq {
+			m.flash = ""
+		}
 
 	case listMsg:
 		a := m.accts[msg.acct]
@@ -285,6 +306,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.sync(i))
 		}
 		return m, tea.Batch(cmds...)
+
+	default:
+		if m.composer != nil { // cursor blink, paste, …
+			return m, m.composer.update(msg)
+		}
 	}
 	return m, nil
 }
@@ -329,8 +355,10 @@ func (m *Model) onKey(key string) tea.Cmd {
 		return m.switchAccount((m.cur - 1 + len(m.accts)) % len(m.accts))
 	case "]":
 		return m.switchAccount((m.cur + 1) % len(m.accts))
-	case "r":
+	case "ctrl+r":
 		return m.sync(m.cur)
+	case "c", "r", "a", "f":
+		return m.startCompose(key)
 	case "g":
 		m.pendingG = true
 		return nil
