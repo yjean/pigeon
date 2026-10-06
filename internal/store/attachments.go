@@ -89,3 +89,12 @@ func quarantine(path string) {
 	v := fmt.Sprintf("0081;%x;pigeon;", time.Now().Unix())
 	_ = exec.Command("xattr", "-w", "com.apple.quarantine", v, path).Run()
 }
+
+// DownloadAttachment returns an attachment's bytes (e.g. to forward it).
+func (a *Account) DownloadAttachment(ctx context.Context, att gmail.Attachment) ([]byte, error) {
+	c, err := a.Client(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return c.Download(ctx, att)
+}

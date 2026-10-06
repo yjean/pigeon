@@ -384,6 +384,7 @@ func helpLines() []string {
 		{"  ctrl+enter", "  send (in compose; ctrl+s also works)"},
 		{"  ctrl+e", "  edit the body in $EDITOR"},
 		{"  tab / esc", "  next field / close (save draft or discard)"},
+		{"  ctrl+a", "  attach a file (or drop files on the window)"},
 		{"o", "links & attachments: open, save, copy"},
 		{"U", "toggle unread only / all conversations"},
 		{"/", "search (Gmail syntax: from: subject: has:attachment …)"},

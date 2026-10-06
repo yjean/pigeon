@@ -4,12 +4,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"mime"
+	"mime/multipart"
 	"mime/quotedprintable"
 	"net/http"
 	"net/mail"
+	"net/textproto"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -23,7 +28,18 @@ type Outgoing struct {
 	ThreadID   string // set for replies/forwards so Gmail threads them
 	InReplyTo  string
 	References string
+	Files      []File
 }
+
+// File is an attachment of an outgoing message.
+type File struct {
+	Name string
+	Type string // MIME type; guessed when empty
+	Data []byte
+}
+
+// MaxAttachments is Gmail's limit for attachments of a sent message.
+const MaxAttachments = 25 << 20
 
 // Raw renders the message as RFC 5322 bytes (UTF-8, quoted-printable body).
 // It validates the recipients.
@@ -58,17 +74,82 @@ func (o Outgoing) Raw() ([]byte, error) {
 		fmt.Fprintf(&b, "References: %s\r\n", o.References)
 	}
 	b.WriteString("MIME-Version: 1.0\r\n")
-	b.WriteString("Content-Type: text/plain; charset=\"UTF-8\"\r\n")
-	b.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
-	qp := quotedprintable.NewWriter(&b)
-	body := strings.ReplaceAll(strings.ReplaceAll(o.Body, "\r\n", "\n"), "\n", "\r\n")
-	if _, err := qp.Write([]byte(body)); err != nil {
+	if len(o.Files) == 0 {
+		writeTextPart(&b, o.Body)
+		return b.Bytes(), nil
+	}
+
+	mw := multipart.NewWriter(&b)
+	fmt.Fprintf(&b, "Content-Type: multipart/mixed; boundary=%q\r\n\r\n", mw.Boundary())
+	text, err := mw.CreatePart(textproto.MIMEHeader{
+		"Content-Type":              {`text/plain; charset="UTF-8"`},
+		"Content-Transfer-Encoding": {"quoted-printable"},
+	})
+	if err != nil {
 		return nil, err
 	}
-	if err := qp.Close(); err != nil {
+	writeQP(text, o.Body)
+	for _, f := range o.Files {
+		ctype := f.Type
+		if ctype == "" {
+			ctype = mime.TypeByExtension(strings.ToLower(filepath.Ext(f.Name)))
+		}
+		if ctype == "" {
+			ctype = http.DetectContentType(f.Data)
+		}
+		name := mime.QEncoding.Encode("utf-8", f.Name)
+		part, err := mw.CreatePart(textproto.MIMEHeader{
+			"Content-Type":              {mime.FormatMediaType(baseType(ctype), map[string]string{"name": name})},
+			"Content-Disposition":       {mime.FormatMediaType("attachment", map[string]string{"filename": f.Name})},
+			"Content-Transfer-Encoding": {"base64"},
+		})
+		if err != nil {
+			return nil, err
+		}
+		writeBase64Lines(part, f.Data)
+	}
+	if err := mw.Close(); err != nil {
 		return nil, err
 	}
 	return b.Bytes(), nil
+}
+
+// FilesSize is the total size of the attachments.
+func (o Outgoing) FilesSize() int {
+	n := 0
+	for _, f := range o.Files {
+		n += len(f.Data)
+	}
+	return n
+}
+
+func writeTextPart(b *bytes.Buffer, body string) {
+	b.WriteString("Content-Type: text/plain; charset=\"UTF-8\"\r\n")
+	b.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
+	writeQP(b, body)
+}
+
+func writeQP(w io.Writer, body string) {
+	qp := quotedprintable.NewWriter(w)
+	_, _ = qp.Write([]byte(strings.ReplaceAll(strings.ReplaceAll(body, "\r\n", "\n"), "\n", "\r\n")))
+	_ = qp.Close()
+}
+
+// writeBase64Lines writes base64 wrapped at 76 columns (RFC 2045).
+func writeBase64Lines(w io.Writer, data []byte) {
+	enc := base64.StdEncoding.EncodeToString(data)
+	for len(enc) > 76 {
+		io.WriteString(w, enc[:76]+"\r\n")
+		enc = enc[76:]
+	}
+	io.WriteString(w, enc+"\r\n")
+}
+
+func baseType(ctype string) string {
+	if t, _, err := mime.ParseMediaType(ctype); err == nil {
+		return t
+	}
+	return "application/octet-stream"
 }
 
 func parseRecipients(s string) ([]*mail.Address, error) {
@@ -89,15 +170,39 @@ func joinAddrs(list []*mail.Address) string {
 
 // Send sends the message.
 func (c *Client) Send(ctx context.Context, o Outgoing) error {
+	if o.FilesSize() > MaxAttachments {
+		return fmt.Errorf("attachments total %d MB, over Gmail's 25 MB limit", o.FilesSize()>>20)
+	}
 	raw, err := o.Raw()
 	if err != nil {
 		return err
 	}
-	body := map[string]string{"raw": base64.URLEncoding.EncodeToString(raw)}
+	meta := map[string]string{}
 	if o.ThreadID != "" {
-		body["threadId"] = o.ThreadID
+		meta["threadId"] = o.ThreadID
 	}
-	return c.do(ctx, http.MethodPost, "messages/send", nil, body, nil)
+	return c.upload(ctx, "messages/send", meta, raw)
+}
+
+// upload posts a raw RFC 822 message through the media upload endpoint
+// (multipart/related: JSON metadata + the message), which, unlike the JSON
+// "raw" field, accepts messages up to 35 MB.
+func (c *Client) upload(ctx context.Context, path string, meta any, raw []byte) error {
+	var b bytes.Buffer
+	mw := multipart.NewWriter(&b)
+	metaJSON, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+	p, _ := mw.CreatePart(textproto.MIMEHeader{"Content-Type": {"application/json; charset=UTF-8"}})
+	p.Write(metaJSON)
+	p, _ = mw.CreatePart(textproto.MIMEHeader{"Content-Type": {"message/rfc822"}})
+	p.Write(raw)
+	if err := mw.Close(); err != nil {
+		return err
+	}
+	return c.request(ctx, http.MethodPost, uploadURL+path+"?uploadType=multipart",
+		"multipart/related; boundary="+mw.Boundary(), b.Bytes(), nil)
 }
 
 // SaveDraft stores the message in Drafts. Recipients may be empty.
@@ -109,11 +214,11 @@ func (c *Client) SaveDraft(ctx context.Context, o Outgoing) error {
 	if err != nil {
 		return err
 	}
-	msg := map[string]string{"raw": base64.URLEncoding.EncodeToString(raw)}
+	msg := map[string]string{}
 	if o.ThreadID != "" {
 		msg["threadId"] = o.ThreadID
 	}
-	return c.do(ctx, http.MethodPost, "drafts", nil, map[string]any{"message": msg}, nil)
+	return c.upload(ctx, "drafts", map[string]any{"message": msg}, raw)
 }
 
 // DisplayName returns the primary send-as display name ("" if unset).

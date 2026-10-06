@@ -14,7 +14,10 @@ import (
 	"time"
 )
 
-const baseURL = "https://gmail.googleapis.com/gmail/v1/users/me/"
+const (
+	baseURL   = "https://gmail.googleapis.com/gmail/v1/users/me/"
+	uploadURL = "https://gmail.googleapis.com/upload/gmail/v1/users/me/" // up to 35 MB messages
+)
 
 // Client calls Gmail with an OAuth-authorized HTTP client (see auth.Client).
 type Client struct{ hc *http.Client }
@@ -241,27 +244,34 @@ func (e *APIError) retryable() bool {
 	return false
 }
 
-// do performs a request, retrying rate limits and transient errors with exponential backoff.
+// do performs a JSON API request.
 func (c *Client) do(ctx context.Context, method, path string, q url.Values, body, out any) error {
 	var payload []byte
+	contentType := ""
 	if body != nil {
 		var err error
 		if payload, err = json.Marshal(body); err != nil {
 			return err
 		}
+		contentType = "application/json"
 	}
 	u := baseURL + path
 	if len(q) > 0 {
 		u += "?" + q.Encode()
 	}
+	return c.request(ctx, method, u, contentType, payload, out)
+}
+
+// request sends payload, retrying rate limits and transient errors with exponential backoff.
+func (c *Client) request(ctx context.Context, method, u, contentType string, payload []byte, out any) error {
 	backoff := 400 * time.Millisecond
 	for attempt := 0; ; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, method, u, bytes.NewReader(payload))
 		if err != nil {
 			return err
 		}
-		if payload != nil {
-			req.Header.Set("Content-Type", "application/json")
+		if contentType != "" {
+			req.Header.Set("Content-Type", contentType)
 		}
 		resp, err := c.hc.Do(req)
 		if err != nil {

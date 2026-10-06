@@ -1,7 +1,13 @@
 package gmail
 
 import (
+	"bytes"
 	"encoding/base64"
+	"fmt"
+	"io"
+	"mime"
+	"mime/multipart"
+	"net/mail"
 	"strings"
 	"testing"
 )
@@ -135,5 +141,51 @@ func TestLinksAndAttachments(t *testing.T) {
 		if SafeURL(bad) {
 			t.Errorf("%q must not be openable", bad)
 		}
+	}
+}
+
+func TestRawWithAttachmentsRoundTrip(t *testing.T) {
+	pdf := bytes.Repeat([]byte("%PDF-1.4 binary\x00\xff"), 200)
+	o := Outgoing{From: Address{Email: "me@x.io"}, To: "j@x.io", Subject: "Devis signé", Body: "Voilà le devis.",
+		Files: []File{{Name: "Devis signé.pdf", Data: pdf}, {Name: "notes.txt", Data: []byte("hello")}}}
+	raw, err := o.Raw()
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg, err := mail.ReadMessage(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mt, params, _ := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+	if mt != "multipart/mixed" {
+		t.Fatalf("content type %q", mt)
+	}
+	mr := multipart.NewReader(msg.Body, params["boundary"])
+	var parts []string
+	for {
+		p, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, _ := io.ReadAll(p) // multipart decodes quoted-printable; base64 we decode below
+		if p.Header.Get("Content-Transfer-Encoding") == "base64" {
+			data, _ = base64.StdEncoding.DecodeString(strings.ReplaceAll(string(data), "\r\n", ""))
+		}
+		_, dp, _ := mime.ParseMediaType(p.Header.Get("Content-Disposition"))
+		ct, _, _ := mime.ParseMediaType(p.Header.Get("Content-Type"))
+		parts = append(parts, fmt.Sprintf("%s|%s|%d", ct, dp["filename"], len(data)))
+		if dp["filename"] == "Devis signé.pdf" && !bytes.Equal(data, pdf) {
+			t.Error("pdf bytes changed")
+		}
+		if ct == "text/plain" && dp["filename"] == "" && string(data) != "Voilà le devis." {
+			t.Errorf("body %q", data)
+		}
+	}
+	want := []string{"text/plain||16", "application/pdf|Devis signé.pdf|" + fmt.Sprint(len(pdf)), "text/plain|notes.txt|5"}
+	if strings.Join(parts, ",") != strings.Join(want, ",") {
+		t.Fatalf("parts:\n got %v\nwant %v", parts, want)
 	}
 }

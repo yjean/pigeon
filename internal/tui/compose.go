@@ -2,11 +2,13 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/filepicker"
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -46,6 +48,7 @@ const (
 	fTo composeField = iota
 	fCc
 	fSubject
+	fAttach
 	fBody
 	nFields
 )
@@ -68,6 +71,12 @@ type composer struct {
 	suggest func(typed string, exclude []string, n int) []store.Contact
 	sugg    []store.Contact
 	suggIdx int
+
+	// Attachments.
+	atts     []composeAtt
+	attSel   int
+	initAtts int               // attachments at open (forward), to detect changes
+	browse   *filepicker.Model // file picker shown in place of the body
 }
 
 type (
@@ -141,8 +150,23 @@ func (c *composer) focus(f composeField) tea.Cmd {
 }
 
 func (c *composer) update(msg tea.Msg) tea.Cmd {
+	if c.browse != nil {
+		return c.browseUpdate(msg)
+	}
+	if p, ok := msg.(tea.PasteMsg); ok {
+		if paths := droppedPaths(p.Content); len(paths) > 0 { // files dropped on the window
+			for _, path := range paths {
+				if err := c.addPath(path); err != nil {
+					c.err = err
+				}
+			}
+			return nil
+		}
+	}
 	var cmd tea.Cmd
 	switch c.field {
+	case fAttach:
+		return nil
 	case fTo, fCc:
 		// Only re-suggest when the text changed: cursor blinks also pass here
 		// and must not reset the highlighted suggestion.
@@ -213,7 +237,8 @@ func (c *composer) outgoing() gmail.Outgoing {
 
 func (c *composer) modified() bool {
 	o := c.outgoing()
-	return o.To != c.base.To || o.Cc != c.base.Cc || o.Subject != c.base.Subject || o.Body != c.base.Body
+	return o.To != c.base.To || o.Cc != c.base.Cc || o.Subject != c.base.Subject || o.Body != c.base.Body ||
+		len(c.atts) != c.initAtts
 }
 
 // setSize fits the inputs into a pane of inner size w×h.
@@ -226,7 +251,7 @@ func (c *composer) setSize(w, h int) {
 }
 
 // composeChrome is the number of non-body lines in the compose pane.
-const composeChrome = 7 // title, note, to, cc, subject, rule, footer
+const composeChrome = 8 // title, note, to, cc, subject, attach, rule, footer
 
 // --- Model integration ---
 
@@ -255,9 +280,12 @@ func (m *Model) startCompose(kind string) tea.Cmd {
 		c, cmd = newComposer("Reply all", m.cur, gmail.Reply(t, me, true), fBody)
 	case "f":
 		c, cmd = newComposer("Forward", m.cur, gmail.Forward(t, me), fTo)
-		if len(t.Messages[len(t.Messages)-1].Attachments()) > 0 {
-			c.note = "⚠ attachments are not forwarded yet"
+		for _, att := range t.Messages[len(t.Messages)-1].AttachmentParts() {
+			if !att.Inline {
+				c.atts = append(c.atts, composeAtt{name: att.Filename, size: att.Size, remote: &att})
+			}
 		}
+		c.initAtts = len(c.atts)
 	}
 	return m.openComposer(c, cmd)
 }
@@ -283,6 +311,13 @@ func (m *Model) composeKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	key := msg.String()
+	if c.browse != nil {
+		if key == "esc" || key == "q" {
+			c.browse = nil
+			return nil
+		}
+		return c.browseUpdate(msg)
+	}
 	if c.confirm {
 		switch key {
 		case "s":
@@ -331,6 +366,24 @@ func (m *Model) composeKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 	case "ctrl+e":
 		return m.editInEditor()
+	case "ctrl+a":
+		return c.openBrowser()
+	}
+	if c.field == fAttach {
+		switch key {
+		case "enter":
+			return c.openBrowser()
+		case "left", "h":
+			c.attSel = max(c.attSel-1, 0)
+		case "right", "l":
+			c.attSel = min(c.attSel+1, len(c.atts)-1)
+		case "backspace", "delete", "d", "x":
+			if len(c.atts) > 0 {
+				c.atts = append(c.atts[:c.attSel], c.atts[c.attSel+1:]...)
+				c.attSel = clamp(c.attSel, 0, len(c.atts)-1)
+			}
+		}
+		return nil
 	}
 	c.err = nil
 	return c.update(msg)
@@ -340,6 +393,10 @@ func (m *Model) composeKey(msg tea.KeyPressMsg) tea.Cmd {
 func (m *Model) deliver(draft bool) tea.Cmd {
 	c := m.composer
 	o := c.outgoing()
+	if !draft && c.attSize() > gmail.MaxAttachments {
+		c.err = fmt.Errorf("attachments total %s, over Gmail's 25 MB limit", humanSize(c.attSize()))
+		return nil
+	}
 	if !draft {
 		probe := o
 		probe.From = gmail.Address{Email: m.accts[c.acct].store.Email}
@@ -352,11 +409,15 @@ func (m *Model) deliver(draft bool) tea.Cmd {
 		c.busy = "Saving draft…"
 	}
 	c.confirm, c.err = false, nil
-	idx, st := c.acct, m.accts[c.acct].store
+	idx, st, atts := c.acct, m.accts[c.acct].store, c.atts
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		var err error
+		files, err := resolveFiles(ctx, st, atts)
+		if err != nil {
+			return sentMsg{acct: idx, draft: draft, err: err}
+		}
+		o.Files = files
 		if draft {
 			err = st.SaveDraft(ctx, o)
 		} else {
@@ -453,8 +514,16 @@ func (m *Model) renderComposer(w, h int) string {
 	lines = append(lines, c.suggestionLines(fTo, iw)...)
 	lines = append(lines, label(fCc, "Cc")+c.cc.View())
 	lines = append(lines, c.suggestionLines(fCc, iw)...)
-	lines = append(lines, label(fSubject, "Subject")+c.subject.View(), sRule.Render(" "+strings.Repeat("─", iw-2)))
-	lines = append(lines, strings.Split(c.body.View(), "\n")...)
+	lines = append(lines, label(fSubject, "Subject")+c.subject.View(), label(fAttach, "Attach")+c.attachLine(iw-12),
+		sRule.Render(" "+strings.Repeat("─", iw-2)))
+	if c.browse != nil {
+		lines = append(lines, " "+sTitle.Render("Attach a file")+sDim.Render("  "+c.browse.CurrentDirectory))
+		for _, l := range strings.Split(c.browse.View(), "\n") {
+			lines = append(lines, " "+l)
+		}
+	} else {
+		lines = append(lines, strings.Split(c.body.View(), "\n")...)
+	}
 	for len(lines) < h-3 {
 		lines = append(lines, "")
 	}
@@ -474,8 +543,15 @@ func (m *Model) renderComposer(w, h int) string {
 	}
 	lines = append(lines, footer)
 
-	if len(c.sugg) > 0 && c.busy == "" && !c.confirm && c.err == nil {
-		lines[len(lines)-1] = sDim.Render(" ↓/↑ choose · tab accept · esc dismiss")
+	if c.busy == "" && !c.confirm && c.err == nil {
+		switch {
+		case c.browse != nil:
+			lines[len(lines)-1] = sDim.Render(" j/k move · l/enter open or attach · h up a folder · esc cancel")
+		case len(c.sugg) > 0:
+			lines[len(lines)-1] = sDim.Render(" ↓/↑ choose · tab accept · esc dismiss")
+		case c.field == fAttach:
+			lines[len(lines)-1] = sDim.Render(" enter/ctrl+a add a file · ←/→ select · backspace remove · or drop files on the window")
+		}
 	}
 
 	border := cInsert

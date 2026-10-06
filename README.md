@@ -18,6 +18,7 @@ A fast, keyboard-driven Gmail client for the terminal, inspired by [slk](https:/
 - [x] TUI: account rail, thread list, reading pane, status bar
 - [x] Disk cache: instant startup, incremental sync (by thread historyId), prefetch
 - [x] Compose / reply / reply all / forward (in-app editor or `$EDITOR`), save drafts
+- [x] Attachments: attach files (`ctrl+a` browser or drag & drop), forward with attachments
 - [x] Archive / trash / star / mark unread, with undo
 - [ ] Labels sidebar
 - [x] Search (`/`, Gmail search syntax)
@@ -78,6 +79,7 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
 | `ctrl+e` | edit the body in `$EDITOR` (in compose) |
 | `tab` / `shift+tab` | next / previous field (in compose) |
 | `↓` `↑` / `ctrl+n` `ctrl+p`, `tab` | choose / accept an address suggestion (To, Cc) |
+| `ctrl+a` | attach a file (in compose); dropping files on the terminal also attaches them |
 | `esc` | close compose: save draft, discard, or keep editing |
 | `/` | search with Gmail syntax (`from:` `subject:` `has:attachment` `after:2026/09/01` …); `esc` leaves the results |
 | `o` | links & attachments of the conversation: `enter` open, `s` save to ~/Downloads (or `$PIGEON_DOWNLOAD_DIR`), `y` copy link, `1`–`9` pick |

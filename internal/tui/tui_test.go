@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -86,5 +88,31 @@ func TestMisleadingLinks(t *testing.T) {
 		if got := misleading(gmail.Link{Text: c.text, URL: c.url}); got != c.want {
 			t.Errorf("%q → %q: got %v", c.text, c.url, got)
 		}
+	}
+}
+
+func TestDroppedPaths(t *testing.T) {
+	dir := t.TempDir()
+	a := filepath.Join(dir, "Devis signé 104.pdf")
+	b := filepath.Join(dir, "notes.txt")
+	os.WriteFile(a, []byte("pdf"), 0o600)
+	os.WriteFile(b, []byte("txt"), 0o600)
+	esc := func(p string) string { return strings.ReplaceAll(p, " ", `\ `) }
+
+	for in, want := range map[string]int{
+		esc(a):                 1, // Ghostty: backslash-escaped spaces
+		"'" + a + "'":          1, // quoted
+		esc(a) + " " + esc(b):  2, // several files
+		"file://" + b:          1,
+		"hello world":          0, // regular text paste
+		dir:                    0, // a folder is not attachable
+		esc(a) + " not-a-file": 0, // any non-file token: treat as text
+	} {
+		if got := droppedPaths(in); len(got) != want {
+			t.Errorf("%q → %v, want %d paths", in, got, want)
+		}
+	}
+	if got := droppedPaths(esc(a)); len(got) != 1 || got[0] != a {
+		t.Errorf("unescaped path: %v", got)
 	}
 }
