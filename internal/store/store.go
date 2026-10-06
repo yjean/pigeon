@@ -24,7 +24,7 @@ import (
 )
 
 // cacheVersion is bumped whenever gmail.Summarize changes, invalidating cached lists.
-const cacheVersion = 4
+const cacheVersion = 5
 
 // PageSize is how many threads a mailbox shows.
 const PageSize = 50

@@ -147,11 +147,11 @@ func renderRow(s gmail.Summary, w int, selected, focused bool) string {
 		star = st(fg(cStar)).Render("★ ")
 	}
 
-	const dateW = 10
+	const dateW, clipW = 10, 3
 	fromW := clamp(w/4, 12, 28)
-	restW := w - 4 - fromW - 1 - dateW
+	restW := w - 4 - fromW - 1 - clipW - dateW
 	if restW < 10 { // very narrow terminal: drop the sender column
-		fromW, restW = 0, w-4-dateW
+		fromW, restW = 0, w-4-clipW-dateW
 	}
 
 	sender := oneLine(s.From)
@@ -173,6 +173,11 @@ func renderRow(s gmail.Summary, w int, selected, focused bool) string {
 	b.WriteString(lead)
 	b.WriteString(dot)
 	b.WriteString(star)
+	clip := strings.Repeat(" ", clipW)
+	if s.Attached {
+		clip = "📎 "
+	}
+	b.WriteString(st(sBase).Render(clip))
 	if fromW > 0 {
 		b.WriteString(st(from).Render(padRight(ansi.Truncate(sender, fromW, "…"), fromW)))
 		b.WriteString(st(sBase).Render(" "))

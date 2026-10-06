@@ -30,7 +30,7 @@ func TestListFileIsSafeForSearches(t *testing.T) {
 	if f := listFile("q:from:a/b subject:\"x y\""); strings.ContainsAny(f, "/: \"") {
 		t.Fatalf("unsafe file name %q", f)
 	}
-	if listFile("INBOX") != "list-INBOX.v4.json" {
+	if listFile("INBOX") != "list-INBOX.v5.json" {
 		t.Fatal(listFile("INBOX"))
 	}
 }

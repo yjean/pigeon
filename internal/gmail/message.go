@@ -80,6 +80,16 @@ func ParseAddressList(s string) []Address {
 	return out
 }
 
+// HasAttachment guesses whether the message carries a file. It works on
+// format=metadata, which has the top-level MIME type but no parts: files
+// make it multipart/mixed (inline images use multipart/related).
+func (m Message) HasAttachment() bool {
+	if len(m.Payload.Parts) > 0 { // format=full: look at the parts
+		return len(m.Attachments()) > 0
+	}
+	return strings.EqualFold(m.Payload.MimeType, "multipart/mixed")
+}
+
 // Summary is what the thread list shows. It is cached on disk.
 type Summary struct {
 	ID        string    `json:"id"`
@@ -91,7 +101,8 @@ type Summary struct {
 	Count     int       `json:"count"`
 	Unread    bool      `json:"unread"`
 	Starred   bool      `json:"starred"`
-	LastID    string    `json:"last_id"` // latest message, the one "mark unread" applies to
+	Attached  bool      `json:"attached"` // some message carries a file
+	LastID    string    `json:"last_id"`  // latest message, the one "mark unread" applies to
 }
 
 // Summarize builds the list row of a thread fetched with GetThread.
@@ -111,6 +122,7 @@ func Summarize(t *Thread, me string) Summary {
 	for _, m := range t.Messages {
 		s.Unread = s.Unread || m.HasLabel("UNREAD")
 		s.Starred = s.Starred || m.HasLabel("STARRED")
+		s.Attached = s.Attached || m.HasAttachment()
 		a := ParseAddress(m.Header("From"))
 		name := a.Short()
 		if strings.EqualFold(a.Email, me) {

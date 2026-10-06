@@ -55,8 +55,13 @@ func TestSummarize(t *testing.T) {
 	s := Summarize(&Thread{ID: "t", Messages: []Message{
 		msg(`"LEITAO, Marc" <m@x.io>`), msg("Yoann <yoann@42.works>"), msg("Julian Doe <j@x.io>", "UNREAD"),
 	}}, "yoann@42.works")
-	if s.From != "LEITAO, me, Julian" || !s.Unread || s.Count != 3 || s.Subject != "Hi" {
+	if s.From != "LEITAO, me, Julian" || !s.Unread || s.Count != 3 || s.Subject != "Hi" || s.Attached {
 		t.Fatalf("got %+v", s)
+	}
+	m := msg("j@x.io")
+	m.Payload.MimeType = "multipart/mixed"
+	if !Summarize(&Thread{Messages: []Message{msg("a@x.io"), m}}, "").Attached {
+		t.Fatal("multipart/mixed should count as attached")
 	}
 }
 
