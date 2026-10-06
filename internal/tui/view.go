@@ -13,29 +13,6 @@ import (
 	"github.com/yoann/pigeon/internal/gmail"
 )
 
-// Tokyo Night-ish palette, close to slk's.
-var (
-	cAccent = lipgloss.Color("#7aa2f7")
-	cGreen  = lipgloss.Color("#9ece6a")
-	cYellow = lipgloss.Color("#e0af68")
-	cRed    = lipgloss.Color("#f7768e")
-	cFg     = lipgloss.Color("#c0caf5")
-	cDim    = lipgloss.Color("#565f89")
-	cMuted  = lipgloss.Color("#828bb8")
-	cSelBg  = lipgloss.Color("#283457")
-	cDark   = lipgloss.Color("#1a1b26")
-	cBorder = lipgloss.Color("#3b4261")
-
-	sBase    = lipgloss.NewStyle().Foreground(cFg)
-	sDim     = lipgloss.NewStyle().Foreground(cDim)
-	sMuted   = lipgloss.NewStyle().Foreground(cMuted)
-	sBold    = lipgloss.NewStyle().Foreground(cFg).Bold(true)
-	sAccent  = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
-	sDate    = lipgloss.NewStyle().Foreground(cDim).Italic(true)
-	sMode    = lipgloss.NewStyle().Foreground(cDark).Background(cAccent).Bold(true)
-	sModeAlt = lipgloss.NewStyle().Foreground(cDark).Background(cGreen).Bold(true)
-)
-
 const railW = 6
 
 func (m *Model) View() tea.View {
@@ -71,13 +48,13 @@ func (m *Model) renderRail(h int) string {
 	for i, a := range m.accts {
 		badge := " " + a.badge + " "
 		if i == m.cur {
-			badge = sMode.Render(badge)
+			badge = sBadge.Render(badge)
 		} else {
 			badge = sMuted.Render(badge)
 		}
 		dot := " "
 		if a.inboxUnread > 0 || a.inboxUnread < 0 && a.box == inbox && a.unread() > 0 {
-			dot = lipgloss.NewStyle().Foreground(cYellow).Render("•")
+			dot = fg(cCount).Render("•")
 		}
 		lines = append(lines, " "+badge+dot, "")
 	}
@@ -97,9 +74,9 @@ func (m *Model) renderList(w, h int) string {
 	iw, ih := w-2, h-2
 	lines := make([]string, 0, ih)
 
-	head := sAccent.Render(a.box.name)
+	head := sTitle.Render(a.box.name)
 	if a.unreadOnly[a.box.label] {
-		head += lipgloss.NewStyle().Foreground(cYellow).Render(" · unread")
+		head += fg(cCount).Render(" · unread")
 	}
 	head += sDim.Render("  ·  " + a.store.Email)
 	n := a.unread()
@@ -107,7 +84,7 @@ func (m *Model) renderList(w, h int) string {
 		n = a.inboxUnread // the true count, not just the loaded page
 	}
 	if n > 0 {
-		head += lipgloss.NewStyle().Foreground(cYellow).Render(fmt.Sprintf("  ·  %d unread", n))
+		head += fg(cCount).Render(fmt.Sprintf("  ·  %d unread", n))
 	}
 	lines = append(lines, " "+head)
 
@@ -116,7 +93,7 @@ func (m *Model) renderList(w, h int) string {
 	case !a.loaded && a.err == nil:
 		lines = append(lines, sDim.Render(" Loading…"))
 	case a.loaded && len(a.threads) == 0 && a.unreadOnly[a.box.label]:
-		lines = append(lines, "", lipgloss.NewStyle().Foreground(cGreen).Render(" ✓ Woohoo! You've read everything here.")+sDim.Render("  U to show all conversations"))
+		lines = append(lines, "", fg(cOK).Render(" ✓ Woohoo! You've read everything here.")+sDim.Render("  U to show all conversations"))
 	case a.loaded && len(a.threads) == 0:
 		lines = append(lines, sDim.Render(" No conversations."))
 	default:
@@ -149,19 +126,19 @@ func renderRow(s gmail.Summary, w int, selected, focused bool) string {
 
 	lead := st(sBase).Render(" ")
 	if selected {
-		c := cGreen
+		c := cSelBar
 		if !focused {
-			c = cDim
+			c = overlay0
 		}
 		lead = st(lipgloss.NewStyle().Foreground(c)).Render("▌")
 	}
 	dot := st(sBase).Render(" ")
 	if s.Unread {
-		dot = st(lipgloss.NewStyle().Foreground(cAccent)).Render("●")
+		dot = st(fg(cUnread)).Render("●")
 	}
 	star := st(sBase).Render("  ")
 	if s.Starred {
-		star = st(lipgloss.NewStyle().Foreground(cYellow)).Render("★ ")
+		star = st(fg(cStar)).Render("★ ")
 	}
 
 	const dateW = 10
@@ -238,7 +215,7 @@ func (m *Model) renderReader(w, h int) string {
 	iw := w - 2
 	var lines []string
 	if m.help {
-		lines = append(lines, " "+sAccent.Render("Keybindings"), sDim.Render(" "+strings.Repeat("─", iw-2)))
+		lines = append(lines, " "+sTitle.Render("Keybindings"), sRule.Render(" "+strings.Repeat("─", iw-2)))
 		lines = append(lines, helpLines()...)
 		return pane(lines, w, h, true)
 	}
@@ -251,11 +228,11 @@ func (m *Model) renderReader(w, h int) string {
 	if subject == "" {
 		subject = "(no subject)"
 	}
-	lines = append(lines, " "+sBold.Render(subject), sDim.Render(" "+strings.Repeat("─", iw-2)))
+	lines = append(lines, " "+sBold.Render(subject), sRule.Render(" "+strings.Repeat("─", iw-2)))
 
 	switch {
 	case m.openErr != nil:
-		lines = append(lines, lipgloss.NewStyle().Foreground(cRed).Render(" ✗ "+m.openErr.Error()))
+		lines = append(lines, fg(cErr).Render(" ✗ "+m.openErr.Error()))
 	case m.openThread == nil:
 		lines = append(lines, sDim.Render(" Loading…"))
 	default:
@@ -280,7 +257,7 @@ func renderThread(t *gmail.Thread, w int, me string) (string, int) {
 	last := 0
 	for i, msg := range t.Messages {
 		if i > 0 {
-			lines = append(lines, "", sDim.Render(strings.Repeat("┄", w)), "")
+			lines = append(lines, "", sRule.Render(strings.Repeat("┄", w)), "")
 		}
 		last = len(lines)
 		from := gmail.ParseAddress(msg.Header("From"))
@@ -288,13 +265,13 @@ func renderThread(t *gmail.Thread, w int, me string) (string, int) {
 		if strings.EqualFold(from.Email, me) {
 			name += " (me)"
 		}
-		head := sAccent.Render(name)
+		head := sName.Render(name)
 		if from.Name != "" {
 			head += "  " + sDim.Render(from.Email)
 		}
 		head += "  " + sDate.Render(msg.Time().Local().Format("Mon Jan 2, 3:04 PM"))
 		if msg.HasLabel("UNREAD") {
-			head += lipgloss.NewStyle().Foreground(cYellow).Render("  ●")
+			head += fg(cUnread).Render("  ●")
 		}
 		lines = append(lines, ansi.Truncate(head, w, "…"))
 
@@ -330,12 +307,12 @@ func renderThread(t *gmail.Thread, w int, me string) (string, int) {
 
 func (m *Model) renderStatus() string {
 	a := m.acct()
-	mode := sMode.Render(" NORMAL ")
+	mode := sNormal.Render(" NORMAL ")
 	switch {
 	case m.composer != nil:
-		mode = lipgloss.NewStyle().Foreground(cDark).Background(cYellow).Bold(true).Render(" INSERT ")
+		mode = sInsert.Render(" INSERT ")
 	case m.focus == focusReader:
-		mode = sModeAlt.Render("  READ  ")
+		mode = sRead.Render("  READ  ")
 	}
 	boxName := a.box.name
 	if a.unreadOnly[a.box.label] {
@@ -347,17 +324,17 @@ func (m *Model) renderStatus() string {
 	var right string
 	switch {
 	case m.flash != "":
-		c := cGreen
+		c := cOK
 		if m.flashErr {
-			c = cYellow
+			c = cWarn
 		}
-		right = lipgloss.NewStyle().Foreground(c).Render(m.flash)
+		right = fg(c).Render(m.flash)
 	case a.err != nil:
-		right = lipgloss.NewStyle().Foreground(cRed).Render("✗ " + ansi.Truncate(a.err.Error(), max(m.w/3, 10), "…"))
+		right = fg(cErr).Render("✗ " + ansi.Truncate(a.err.Error(), max(m.w/3, 10), "…"))
 	case len(a.syncing) > 0:
-		right = lipgloss.NewStyle().Foreground(cYellow).Render("⟳ syncing")
+		right = fg(cBusy).Render("⟳ syncing")
 	case !a.lastSync.IsZero():
-		right = lipgloss.NewStyle().Foreground(cGreen).Render("● synced " + a.lastSync.Format("3:04 PM"))
+		right = fg(cOK).Render("● synced " + a.lastSync.Format("3:04 PM"))
 	}
 	right += " "
 
@@ -399,7 +376,7 @@ func helpLines() []string {
 	}
 	out := make([]string, len(rows))
 	for i, r := range rows {
-		out[i] = "  " + sAccent.Render(padRight(r[0], 24)) + sBase.Render(r[1])
+		out[i] = "  " + sKey.Render(padRight(r[0], 24)) + sBase.Render(r[1])
 	}
 	return out
 }
@@ -410,7 +387,7 @@ func helpLines() []string {
 func pane(lines []string, w, h int, focused bool) string {
 	c := cBorder
 	if focused {
-		c = cAccent
+		c = cBorderActive
 	}
 	return paneColor(lines, w, h, c)
 }
@@ -439,7 +416,7 @@ func scrollbar(offset, visible, total int) []string {
 	thumb := max(visible*visible/total, 1)
 	pos := offset * (visible - thumb) / max(total-visible, 1)
 	for i := pos; i < pos+thumb && i < visible; i++ {
-		bar[i] = lipgloss.NewStyle().Foreground(cAccent).Render("┃")
+		bar[i] = fg(overlay1).Render("┃")
 	}
 	return bar
 }

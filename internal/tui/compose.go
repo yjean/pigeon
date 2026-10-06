@@ -61,7 +61,8 @@ func newComposer(title string, acct int, o gmail.Outgoing, field composeField) (
 		ti.CharLimit = 0
 		st := textinput.DefaultDarkStyles()
 		st.Focused.Text, st.Blurred.Text = sBase, sMuted
-		st.Focused.Placeholder, st.Blurred.Placeholder = sDim, sDim
+		st.Focused.Placeholder, st.Blurred.Placeholder = sFaint, sFaint
+		st.Cursor.Color = cCursor
 		ti.SetStyles(st)
 		ti.SetValue(v)
 		return ti
@@ -83,7 +84,8 @@ func newComposer(title string, acct int, o gmail.Outgoing, field composeField) (
 	st := textarea.DefaultDarkStyles()
 	st.Focused.CursorLine = lipgloss.NewStyle()
 	st.Focused.Text, st.Blurred.Text = sBase, sMuted
-	st.Focused.Placeholder, st.Blurred.Placeholder = sDim, sDim
+	st.Focused.Placeholder, st.Blurred.Placeholder = sFaint, sFaint
+	st.Cursor.Color = cCursor
 	c.body.SetStyles(st)
 	c.body.SetValue(o.Body)
 	c.body.MoveToBegin()
@@ -344,19 +346,19 @@ func (m *Model) renderComposer(w, h int) string {
 	label := func(f composeField, name string) string {
 		st := sDim
 		if c.field == f {
-			st = lipgloss.NewStyle().Foreground(cYellow).Bold(true)
+			st = fg(cInsert).Bold(true)
 		}
 		return " " + st.Render(padRight(name, 9)) + " "
 	}
-	title := " " + lipgloss.NewStyle().Foreground(cYellow).Bold(true).Render("✎ "+c.title) +
+	title := " " + fg(cInsert).Bold(true).Render("✎ "+c.title) +
 		sDim.Render("  ·  from "+m.accts[c.acct].store.Email)
 	lines := []string{
 		title,
-		" " + lipgloss.NewStyle().Foreground(cYellow).Render(c.note),
+		" " + fg(cWarn).Render(c.note),
 		label(fTo, "To") + c.to.View(),
 		label(fCc, "Cc") + c.cc.View(),
 		label(fSubject, "Subject") + c.subject.View(),
-		sDim.Render(" " + strings.Repeat("─", iw-2)),
+		sRule.Render(" " + strings.Repeat("─", iw-2)),
 	}
 	lines = append(lines, strings.Split(c.body.View(), "\n")...)
 	for len(lines) < h-3 {
@@ -367,17 +369,17 @@ func (m *Model) renderComposer(w, h int) string {
 	var footer string
 	switch {
 	case c.busy != "":
-		footer = lipgloss.NewStyle().Foreground(cYellow).Render(" ⟳ " + c.busy)
+		footer = fg(cBusy).Render(" ⟳ " + c.busy)
 	case c.confirm:
-		footer = lipgloss.NewStyle().Foreground(cYellow).Bold(true).Render(" Close this message? ") +
+		footer = fg(cWarn).Bold(true).Render(" Close this message? ") +
 			sBase.Render("s") + sDim.Render(" save draft  ") + sBase.Render("d") + sDim.Render(" discard  ") + sBase.Render("esc") + sDim.Render(" keep editing")
 	case c.err != nil:
-		footer = lipgloss.NewStyle().Foreground(cRed).Render(" ✗ " + c.err.Error())
+		footer = fg(cErr).Render(" ✗ " + c.err.Error())
 	default:
 		footer = sDim.Render(" ctrl+enter send · tab next field · ctrl+e edit in $EDITOR · esc close")
 	}
 	lines = append(lines, footer)
 
-	border := cYellow
+	border := cInsert
 	return paneColor(lines, w, h, border)
 }

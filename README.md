@@ -82,6 +82,10 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
 
 ## Design notes
 
+- **Theme**: Catppuccin Mocha (`internal/tui/theme.go`), colors mapped to the Catppuccin
+  style guide roles; modes match LazyVim's lualine (NORMAL blue, INSERT green, READ mauve).
+  No background is painted except selection and badges, so transparent terminals stay transparent.
+
 - **Go**: single static binary, ~10 ms startup, and Bubble Tea for the upcoming TUI.
 - **Scope** `gmail.modify`: read, compose, send, label, archive, trash (no permanent delete).
 - **Secrets**: refresh tokens live in the OS keychain (service `pigeon`), never on disk.
