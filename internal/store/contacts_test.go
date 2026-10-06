@@ -43,3 +43,18 @@ func TestSuggest(t *testing.T) {
 		t.Fatalf("reload: %+v", got)
 	}
 }
+
+func TestSafeFilename(t *testing.T) {
+	for in, want := range map[string]string{
+		"../../.ssh/authorized_keys": "authorized_keys",
+		"devis 2026.pdf":             "devis 2026.pdf",
+		`..\..\evil.exe`:             "evil.exe",
+		"":                           "attachment",
+		".hidden":                    "hidden",
+		"a:b.txt":                    "a_b.txt",
+	} {
+		if got := safeFilename(in); got != want {
+			t.Errorf("%q → %q, want %q", in, got, want)
+		}
+	}
+}

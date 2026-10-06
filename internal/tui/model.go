@@ -133,6 +133,7 @@ type Model struct {
 	composer *composer
 	lastUndo *undoable
 
+	picker    *picker          // links & attachments (o), nil when closed
 	search    *textinput.Model // "/" prompt, nil when closed
 	lastQuery string
 
@@ -222,6 +223,7 @@ func (m *Model) sync(i int) tea.Cmd {
 
 // selectionChanged shows the selected thread in the reader, loading it if needed.
 func (m *Model) selectionChanged() tea.Cmd {
+	m.picker = nil
 	a := m.acct()
 	s := a.selected()
 	if s == nil {
@@ -299,7 +301,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.search != nil {
 			return m, m.searchKey(msg)
 		}
+		if m.picker != nil {
+			return m, m.pickerKey(msg.String())
+		}
 		return m, m.onKey(msg.String())
+
+	case savedMsg:
+		return m, m.onSaved(msg)
 
 	case sentMsg:
 		return m, m.onSent(msg)
@@ -456,6 +464,8 @@ func (m *Model) onKey(key string) tea.Cmd {
 		return m.toggleUnread()
 	case "/":
 		return m.startSearch()
+	case "o":
+		return m.openPicker()
 	case "c", "r", "a", "f":
 		return m.startCompose(key)
 	case "e":

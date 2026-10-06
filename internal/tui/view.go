@@ -218,6 +218,9 @@ func (m *Model) renderReader(w, h int) string {
 	if m.composer != nil {
 		return m.renderComposer(w, h)
 	}
+	if m.picker != nil {
+		return m.renderPicker(w, h)
+	}
 	iw := w - 2
 	var lines []string
 	if m.help {
@@ -293,7 +296,7 @@ func renderThread(t *gmail.Thread, w int, me string) (string, int) {
 			lines = append(lines, sDim.Render(ansi.Truncate("to "+strings.Join(to, ", "), w, "…")))
 		}
 		if att := msg.Attachments(); len(att) > 0 {
-			lines = append(lines, sMuted.Render(ansi.Truncate("📎 "+strings.Join(att, ", "), w, "…")))
+			lines = append(lines, sMuted.Render(ansi.Truncate("📎 "+strings.Join(att, ", "), w-14, "…"))+sFaint.Render("  o to open"))
 		}
 		lines = append(lines, "")
 
@@ -381,6 +384,7 @@ func helpLines() []string {
 		{"  ctrl+enter", "  send (in compose; ctrl+s also works)"},
 		{"  ctrl+e", "  edit the body in $EDITOR"},
 		{"  tab / esc", "  next field / close (save draft or discard)"},
+		{"o", "links & attachments: open, save, copy"},
 		{"U", "toggle unread only / all conversations"},
 		{"/", "search (Gmail syntax: from: subject: has:attachment …)"},
 		{"  esc", "  leave the search results"},
@@ -446,6 +450,9 @@ func fit(s string, w int) string {
 	}
 	return s
 }
+
+func truncate(s string, w int) string { return ansi.Truncate(s, w, "…") }
+func ansiWidth(s string) int          { return ansi.StringWidth(s) }
 
 func padRight(s string, w int) string { return s + strings.Repeat(" ", max(w-ansi.StringWidth(s), 0)) }
 func padLeft(s string, w int) string  { return strings.Repeat(" ", max(w-ansi.StringWidth(s), 0)) + s }

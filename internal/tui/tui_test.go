@@ -70,3 +70,21 @@ func TestNonKeyMsgKeepsSuggestionSelection(t *testing.T) {
 		t.Fatalf("selection reset by a non-key message: idx=%d n=%d", c.suggIdx, len(c.sugg))
 	}
 }
+
+func TestMisleadingLinks(t *testing.T) {
+	for _, c := range []struct {
+		text, url string
+		want      bool
+	}{
+		{"www.electricien-eure.fr", "https://electricite-eure.com/", true},
+		{"paypal.com", "https://paypa1-login.ru/x", true},
+		{"www.bred.fr", "https://www.bred.fr", false},
+		{"bred.fr", "https://client.bred.fr/login", false},
+		{"Check activity", "https://evil.example", false}, // plain words: not a claim about the URL
+		{"jm@x.io", "mailto:jm@x.io", false},
+	} {
+		if got := misleading(gmail.Link{Text: c.text, URL: c.url}); got != c.want {
+			t.Errorf("%q → %q: got %v", c.text, c.url, got)
+		}
+	}
+}

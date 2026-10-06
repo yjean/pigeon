@@ -21,6 +21,7 @@ A fast, keyboard-driven Gmail client for the terminal, inspired by [slk](https:/
 - [x] Archive / trash / star / mark unread, with undo
 - [ ] Labels sidebar
 - [x] Search (`/`, Gmail search syntax)
+- [x] Links & attachments picker (`o`): open links, save/open attachments, copy links
 - [x] Address autocomplete in To/Cc, learned from Sent mail and synced senders
 - [x] Near-instant sync: Gmail history polled every 10 s (≈2 quota units), plus on terminal focus
 
@@ -79,6 +80,7 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
 | `↓` `↑` / `ctrl+n` `ctrl+p`, `tab` | choose / accept an address suggestion (To, Cc) |
 | `esc` | close compose: save draft, discard, or keep editing |
 | `/` | search with Gmail syntax (`from:` `subject:` `has:attachment` `after:2026/09/01` …); `esc` leaves the results |
+| `o` | links & attachments of the conversation: `enter` open, `s` save to ~/Downloads (or `$PIGEON_DOWNLOAD_DIR`), `y` copy link, `1`–`9` pick |
 | `U` | toggle unread only / all conversations (the inbox starts unread-only) |
 | `ctrl+r` | sync now (changes also arrive within ~10 s); drops conversations read meanwhile from the unread view |
 | `?` | help |

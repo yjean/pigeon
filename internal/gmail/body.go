@@ -26,22 +26,6 @@ func (m Message) Body() string {
 	return ""
 }
 
-// Attachments lists attachment file names.
-func (m Message) Attachments() []string {
-	var out []string
-	var walk func(p Part)
-	walk = func(p Part) {
-		if p.Filename != "" {
-			out = append(out, p.Filename)
-		}
-		for _, c := range p.Parts {
-			walk(c)
-		}
-	}
-	walk(m.Payload)
-	return out
-}
-
 func findPart(p Part, mimeType string) *Part {
 	if strings.EqualFold(p.MimeType, mimeType) && p.Filename == "" && p.Body.Data != "" {
 		return &p

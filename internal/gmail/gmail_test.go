@@ -99,3 +99,41 @@ func TestRawAndReply(t *testing.T) {
 		t.Errorf("forward: %+v", f)
 	}
 }
+
+func TestLinksAndAttachments(t *testing.T) {
+	enc := func(s string) string { return base64.URLEncoding.EncodeToString([]byte(s)) }
+	m := Message{ID: "m1", Payload: Part{MimeType: "multipart/mixed", Parts: []Part{
+		{MimeType: "multipart/alternative", Parts: []Part{
+			{MimeType: "text/plain"}, {MimeType: "text/html"},
+		}},
+		{MimeType: "application/pdf", Filename: "devis.pdf", Headers: []Header{{"Content-Disposition", "attachment; filename=devis.pdf"}}},
+		{MimeType: "image/png", Filename: "logo.png", Headers: []Header{{"Content-ID", "<logo>"}}},
+	}}}
+	m.Payload.Parts[0].Parts[0].Body.Data = enc("See https://example.com/a. Also https://example.com/report, thanks")
+	m.Payload.Parts[0].Parts[1].Body.Data = enc(`<p><a href="https://example.com/report">Open <b>report</b></a>
+		<a href="javascript:alert(1)">x</a> <a href="file:///etc/passwd">f</a> <a href="mailto:j@x.io">Julian</a></p>`)
+	m.Payload.Parts[1].Body.AttachmentID = "att1"
+
+	links := m.Links()
+	var got []string
+	for _, l := range links {
+		got = append(got, l.Text+"|"+l.URL)
+	}
+	want := "Open report|https://example.com/report,Julian|mailto:j@x.io,|https://example.com/a"
+	if strings.Join(got, ",") != want {
+		t.Fatalf("links:\n got %v\nwant %v", strings.Join(got, ","), want)
+	}
+
+	atts := m.AttachmentParts()
+	if len(atts) != 2 || atts[0].Filename != "devis.pdf" || atts[0].Inline || !atts[1].Inline {
+		t.Fatalf("attachments: %+v", atts)
+	}
+	if names := m.Attachments(); len(names) != 1 || names[0] != "devis.pdf" {
+		t.Fatalf("names: %v", names)
+	}
+	for _, bad := range []string{"file:///etc/passwd", "javascript:alert(1)", "vscode://x", "https://", "ftp://x"} {
+		if SafeURL(bad) {
+			t.Errorf("%q must not be openable", bad)
+		}
+	}
+}
