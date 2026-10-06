@@ -197,7 +197,7 @@ func (m *Model) readerSize() (w, h int) {
 }
 
 // refreshReader re-renders the open thread into the viewport. reset scrolls to
-// the start of the latest message (like a chat), otherwise keeps the position.
+// the top (the latest message), otherwise keeps the position.
 func (m *Model) refreshReader(reset bool) {
 	if m.w == 0 {
 		return
@@ -209,11 +209,11 @@ func (m *Model) refreshReader(reset bool) {
 		m.reader.SetContent("")
 		return
 	}
-	content, lastStart := renderThread(m.openThread, w-1, m.acct().store.Email)
+	content := renderThread(m.openThread, w-1, m.acct().store.Email)
 	off := m.reader.YOffset()
 	m.reader.SetContent(content)
 	if reset {
-		m.reader.SetYOffset(lastStart)
+		m.reader.GotoTop()
 	} else {
 		m.reader.SetYOffset(off)
 	}
@@ -263,17 +263,15 @@ func (m *Model) renderReader(w, h int) string {
 	return pane(lines, w, h, m.focus == focusReader)
 }
 
-// renderThread formats every message of the thread, returning the content and
-// the line where the last message starts.
-func renderThread(t *gmail.Thread, w int, me string) (string, int) {
+// renderThread formats every message of the thread, newest first.
+func renderThread(t *gmail.Thread, w int, me string) string {
 	w = max(w, 10)
 	var lines []string
-	last := 0
-	for i, msg := range t.Messages {
-		if i > 0 {
+	for i := len(t.Messages) - 1; i >= 0; i-- {
+		msg := t.Messages[i]
+		if i < len(t.Messages)-1 {
 			lines = append(lines, "", sRule.Render(strings.Repeat("┄", w)), "")
 		}
-		last = len(lines)
 		from := gmail.ParseAddress(msg.Header("From"))
 		name := from.Short()
 		if strings.EqualFold(from.Email, me) {
@@ -314,7 +312,7 @@ func renderThread(t *gmail.Thread, w int, me string) (string, int) {
 		}
 		lines = append(lines, strings.Split(ansi.Wrap(body, w, ""), "\n")...)
 	}
-	return strings.Join(lines, "\n"), last
+	return strings.Join(lines, "\n")
 }
 
 // --- status bar ---
