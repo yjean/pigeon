@@ -55,6 +55,7 @@ var (
 	sNormal = lipgloss.NewStyle().Foreground(crust).Background(blue).Bold(true)
 	sRead   = lipgloss.NewStyle().Foreground(crust).Background(mauve).Bold(true)
 	sInsert = lipgloss.NewStyle().Foreground(crust).Background(green).Bold(true)
+	sSearch = lipgloss.NewStyle().Foreground(crust).Background(peach).Bold(true) // like lualine command mode
 	sBadge  = lipgloss.NewStyle().Foreground(crust).Background(lavender).Bold(true)
 )
 

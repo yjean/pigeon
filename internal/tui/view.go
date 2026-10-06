@@ -75,6 +75,9 @@ func (m *Model) renderList(w, h int) string {
 	lines := make([]string, 0, ih)
 
 	head := sTitle.Render(a.box.name)
+	if a.box.search {
+		head += " " + sBase.Render(a.box.query())
+	}
 	if a.unreadOnly[a.box.label] {
 		head += fg(cCount).Render(" · unread")
 	}
@@ -94,6 +97,8 @@ func (m *Model) renderList(w, h int) string {
 		lines = append(lines, sDim.Render(" Loading…"))
 	case a.loaded && len(a.threads) == 0 && a.unreadOnly[a.box.label]:
 		lines = append(lines, "", fg(cOK).Render(" ✓ Woohoo! You've read everything here.")+sDim.Render("  U to show all conversations"))
+	case a.loaded && len(a.threads) == 0 && a.box.search:
+		lines = append(lines, sDim.Render(" No results.")+sFaint.Render("  / to refine · esc to go back"))
 	case a.loaded && len(a.threads) == 0:
 		lines = append(lines, sDim.Render(" No conversations."))
 	default:
@@ -307,6 +312,9 @@ func renderThread(t *gmail.Thread, w int, me string) (string, int) {
 
 func (m *Model) renderStatus() string {
 	a := m.acct()
+	if m.search != nil {
+		return fit(sSearch.Render(" SEARCH ")+" "+sKey.Render("/")+m.search.View(), m.w)
+	}
 	mode := sNormal.Render(" NORMAL ")
 	switch {
 	case m.composer != nil:
@@ -315,6 +323,9 @@ func (m *Model) renderStatus() string {
 		mode = sRead.Render("  READ  ")
 	}
 	boxName := a.box.name
+	if a.box.search {
+		boxName += ": " + a.box.query()
+	}
 	if a.unreadOnly[a.box.label] {
 		boxName += " (unread)"
 	}
@@ -340,7 +351,7 @@ func (m *Model) renderStatus() string {
 
 	lw, cw, rw := lipgloss.Width(left), lipgloss.Width(center), lipgloss.Width(right)
 	gap := m.w - lw - cw - rw
-	if gap < 2 {
+	if gap < 2 || (m.w-cw)/2 <= lw || (m.w+cw)/2 >= m.w-rw { // no room to center the hint: drop it
 		return fit(left+strings.Repeat(" ", max(m.w-lw-rw, 1))+right, m.w)
 	}
 	g1 := (m.w-cw)/2 - lw
@@ -370,6 +381,8 @@ func helpLines() []string {
 		{"  ctrl+e", "  edit the body in $EDITOR"},
 		{"  tab / esc", "  next field / close (save draft or discard)"},
 		{"U", "toggle unread only / all conversations"},
+		{"/", "search (Gmail syntax: from: subject: has:attachment …)"},
+		{"  esc", "  leave the search results"},
 		{"ctrl+r", "sync now"},
 		{"?", "toggle this help"},
 		{"q  ctrl+c", "quit"},

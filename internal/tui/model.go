@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 
@@ -16,16 +17,19 @@ import (
 	"github.com/yoann/pigeon/internal/store"
 )
 
-type mailbox struct{ name, label string }
+type mailbox struct {
+	name, label string
+	search      bool // label is "q:<gmail query>"
+}
 
 var (
-	inbox     = mailbox{"Inbox", "INBOX"}
+	inbox     = mailbox{name: "Inbox", label: "INBOX"}
 	mailboxes = map[string]mailbox{
 		"i": inbox,
-		"s": {"Starred", "STARRED"},
-		"t": {"Sent", "SENT"},
-		"d": {"Drafts", "DRAFT"},
-		"a": {"All mail", ""},
+		"s": {name: "Starred", label: "STARRED"},
+		"t": {name: "Sent", label: "SENT"},
+		"d": {name: "Drafts", label: "DRAFT"},
+		"a": {name: "All mail", label: ""},
 	}
 )
 
@@ -45,6 +49,7 @@ type account struct {
 	store    *store.Account
 	badge    string
 	box      mailbox
+	prevBox  mailbox // where esc leaves a search
 	threads  []gmail.Summary
 	sel, top int
 	loaded   bool
@@ -125,6 +130,9 @@ type Model struct {
 
 	composer *composer
 	lastUndo *undoable
+
+	search    *textinput.Model // "/" prompt, nil when closed
+	lastQuery string
 
 	flash    string // transient status message
 	flashErr bool
@@ -278,6 +286,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.composer != nil {
 			return m, m.composeKey(msg)
 		}
+		if m.search != nil {
+			return m, m.searchKey(msg)
+		}
 		return m, m.onKey(msg.String())
 
 	case sentMsg:
@@ -355,6 +366,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.composer != nil { // cursor blink, paste, …
 			return m, m.composer.update(msg)
 		}
+		if m.search != nil {
+			var cmd tea.Cmd
+			*m.search, cmd = m.search.Update(msg)
+			return m, cmd
+		}
 	}
 	return m, nil
 }
@@ -404,6 +420,8 @@ func (m *Model) onKey(key string) tea.Cmd {
 		return m.sync(m.cur)
 	case "U":
 		return m.toggleUnread()
+	case "/":
+		return m.startSearch()
 	case "c", "r", "a", "f":
 		return m.startCompose(key)
 	case "e":
@@ -452,6 +470,10 @@ func (m *Model) onKey(key string) tea.Cmd {
 	}
 
 	switch key {
+	case "esc":
+		if a.box.search {
+			return m.exitSearch()
+		}
 	case "q":
 		return tea.Quit
 	case "j", "down":

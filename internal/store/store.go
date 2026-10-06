@@ -9,6 +9,7 @@ package store
 
 import (
 	"context"
+	"crypto/sha1"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -243,8 +244,16 @@ func (a *Account) SaveCachedList(view string, list []gmail.Summary) {
 // matches per message ("a message both unread and in the inbox", as in
 // Gmail's Unread section); labelIds match per thread, so a thread with a read
 // inbox message and an unread archived one would wrongly count as unread.
+//
+// A search view is "q:<gmail query>" (optionally with "+UNREAD").
 func viewQuery(view string) (labels []string, query string) {
 	base, unread := strings.CutSuffix(view, "+UNREAD")
+	if q, ok := strings.CutPrefix(base, "q:"); ok {
+		if unread {
+			q += " is:unread"
+		}
+		return nil, q
+	}
 	if view == "UNREAD" {
 		base, unread = "", true
 	}
@@ -261,7 +270,12 @@ func viewQuery(view string) (labels []string, query string) {
 	return nil, strings.TrimSpace(op + " is:unread")
 }
 
-func listFile(view string) string { return fmt.Sprintf("list-%s.v%d.json", view, cacheVersion) }
+func listFile(view string) string {
+	if strings.HasPrefix(view, "q:") { // free text: hash it into a safe file name
+		view = fmt.Sprintf("search-%x", sha1.Sum([]byte(view)))[:19]
+	}
+	return fmt.Sprintf("list-%s.v%d.json", view, cacheVersion)
+}
 
 func (a *Account) remember(list []gmail.Summary, fresh bool) {
 	a.mu.Lock()
