@@ -76,7 +76,7 @@ func (m *Model) renderRail(h int) string {
 			badge = sMuted.Render(badge)
 		}
 		dot := " "
-		if a.box == inbox && a.unread() > 0 {
+		if a.inboxUnread > 0 || a.inboxUnread < 0 && a.box == inbox && a.unread() > 0 {
 			dot = lipgloss.NewStyle().Foreground(cYellow).Render("•")
 		}
 		lines = append(lines, " "+badge+dot, "")
@@ -97,8 +97,16 @@ func (m *Model) renderList(w, h int) string {
 	iw, ih := w-2, h-2
 	lines := make([]string, 0, ih)
 
-	head := sAccent.Render(a.box.name) + sDim.Render("  ·  "+a.store.Email)
-	if n := a.unread(); n > 0 {
+	head := sAccent.Render(a.box.name)
+	if a.unreadOnly[a.box.label] {
+		head += lipgloss.NewStyle().Foreground(cYellow).Render(" · unread")
+	}
+	head += sDim.Render("  ·  " + a.store.Email)
+	n := a.unread()
+	if a.box == inbox && a.inboxUnread >= 0 {
+		n = a.inboxUnread // the true count, not just the loaded page
+	}
+	if n > 0 {
 		head += lipgloss.NewStyle().Foreground(cYellow).Render(fmt.Sprintf("  ·  %d unread", n))
 	}
 	lines = append(lines, " "+head)
@@ -107,6 +115,8 @@ func (m *Model) renderList(w, h int) string {
 	switch {
 	case !a.loaded && a.err == nil:
 		lines = append(lines, sDim.Render(" Loading…"))
+	case a.loaded && len(a.threads) == 0 && a.unreadOnly[a.box.label]:
+		lines = append(lines, "", lipgloss.NewStyle().Foreground(cGreen).Render(" ✓ Woohoo! You've read everything here.")+sDim.Render("  U to show all conversations"))
 	case a.loaded && len(a.threads) == 0:
 		lines = append(lines, sDim.Render(" No conversations."))
 	default:
@@ -327,7 +337,11 @@ func (m *Model) renderStatus() string {
 	case m.focus == focusReader:
 		mode = sModeAlt.Render("  READ  ")
 	}
-	left := mode + " " + sBase.Render("● "+a.box.name) + sDim.Render(" · "+a.store.Email)
+	boxName := a.box.name
+	if a.unreadOnly[a.box.label] {
+		boxName += " (unread)"
+	}
+	left := mode + " " + sBase.Render("● "+boxName) + sDim.Render(" · "+a.store.Email)
 	center := sDim.Italic(true).Render("? for keybindings")
 
 	var right string
@@ -378,6 +392,7 @@ func helpLines() []string {
 		{"  ctrl+enter", "  send (in compose; ctrl+s also works)"},
 		{"  ctrl+e", "  edit the body in $EDITOR"},
 		{"  tab / esc", "  next field / close (save draft or discard)"},
+		{"U", "toggle unread only / all conversations"},
 		{"ctrl+r", "sync now"},
 		{"?", "toggle this help"},
 		{"q  ctrl+c", "quit"},

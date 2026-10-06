@@ -23,7 +23,7 @@ type actionMsg struct {
 // undoable is the last list-removing action, reversible with z.
 type undoable struct {
 	acct    int
-	label   string
+	view    string
 	index   int
 	summary gmail.Summary
 	reverse func(context.Context) error
@@ -37,7 +37,7 @@ func (m *Model) act(kind string) tea.Cmd {
 	if s == nil {
 		return nil
 	}
-	st, id, label := a.store, s.ID, a.box.label
+	st, id, label, view := a.store, s.ID, a.box.label, a.view()
 	modify := func(add, remove []string) func(context.Context) error {
 		return func(ctx context.Context) error { return st.Modify(ctx, id, add, remove) }
 	}
@@ -80,25 +80,28 @@ func (m *Model) act(kind string) tea.Cmd {
 	case "unread":
 		if s.Unread {
 			call, text = modify(nil, []string{"UNREAD"}), "Marked read"
+			a.keepRead(id)
 		} else {
-			call, text = modify([]string{"UNREAD"}, nil), "Marked unread"
+			lastID := s.LastID
+			call = func(ctx context.Context) error { return st.MarkUnread(ctx, id, lastID) }
+			text = "Marked unread"
 			m.focus = focusList // reading it would mark it read again
 		}
-		s.Unread = !s.Unread
+		a.setUnread(s, !s.Unread)
 	default:
 		return nil
 	}
 
 	cmds := []tea.Cmd{m.flashMsg(text, false)}
 	if removeRow {
-		m.lastUndo = &undoable{acct: m.cur, label: label, index: a.sel, summary: *s, reverse: reverse}
+		m.lastUndo = &undoable{acct: m.cur, view: view, index: a.sel, summary: *s, reverse: reverse}
 		a.hidden[id] = time.Now()
 		a.threads = slices.Delete(a.threads, a.sel, a.sel+1)
 		a.sel = clamp(a.sel, 0, len(a.threads)-1)
 		m.focus = focusList
 		cmds = append(cmds, m.selectionChanged())
 	}
-	st.SaveCachedList(label, a.threads)
+	st.SaveCachedList(view, a.threads)
 	cmds = append(cmds, m.background(m.cur, call))
 	return tea.Batch(cmds...)
 }
@@ -113,10 +116,10 @@ func (m *Model) undo() tea.Cmd {
 	a := m.accts[u.acct]
 	delete(a.hidden, u.summary.ID)
 	cmds := []tea.Cmd{m.flashMsg("Undone", false), m.background(u.acct, u.reverse)}
-	if a.box.label == u.label && !slices.ContainsFunc(a.threads, func(s gmail.Summary) bool { return s.ID == u.summary.ID }) {
+	if a.view() == u.view && !slices.ContainsFunc(a.threads, func(s gmail.Summary) bool { return s.ID == u.summary.ID }) {
 		i := clamp(u.index, 0, len(a.threads))
 		a.threads = slices.Insert(a.threads, i, u.summary)
-		a.store.SaveCachedList(u.label, a.threads)
+		a.store.SaveCachedList(u.view, a.threads)
 		if u.acct == m.cur {
 			a.sel = i
 			cmds = append(cmds, m.selectionChanged())

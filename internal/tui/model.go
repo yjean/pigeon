@@ -50,8 +50,47 @@ type account struct {
 	loaded   bool
 	syncing  map[string]bool      // by label
 	hidden   map[string]time.Time // optimistically removed thread IDs
-	err      error
-	lastSync time.Time
+
+	inboxUnread int // true unread inbox count from Gmail (-1 = unknown)
+
+	unreadOnly map[string]bool // by label: show unread threads only (U)
+	keep       map[string]bool // read during this unread-only session: stay listed until refresh
+	err        error
+	lastSync   time.Time
+}
+
+// view is the store view backing the list: the mailbox, unread-only or not.
+func (a *account) view() string {
+	if !a.unreadOnly[a.box.label] {
+		return a.box.label
+	}
+	if a.box.label == "" {
+		return "UNREAD"
+	}
+	return a.box.label + "+UNREAD"
+}
+
+// keepRead keeps a thread read during an unread-only session in the list,
+// so it does not vanish under the cursor (like Gmail until you refresh).
+func (a *account) keepRead(id string) {
+	if a.unreadOnly[a.box.label] {
+		a.keep[id] = true
+	}
+}
+
+// setUnread flips a thread's unread flag and keeps the inbox count in step.
+func (a *account) setUnread(s *gmail.Summary, unread bool) {
+	if s.Unread == unread {
+		return
+	}
+	s.Unread = unread
+	if a.box == inbox && a.inboxUnread >= 0 {
+		if unread {
+			a.inboxUnread++
+		} else {
+			a.inboxUnread = max(a.inboxUnread-1, 0)
+		}
+	}
 }
 
 func (a *account) selected() *gmail.Summary {
@@ -99,8 +138,9 @@ type Model struct {
 type (
 	listMsg struct {
 		acct    int
-		label   string
+		view    string
 		threads []gmail.Summary
+		unread  int
 		err     error
 	}
 	threadMsg struct {
@@ -122,8 +162,9 @@ func Run(accounts []config.Account) error {
 		if err != nil {
 			return err
 		}
-		ac := &account{store: st, badge: badges[i], box: inbox, syncing: map[string]bool{}, hidden: map[string]time.Time{}}
-		ac.threads = st.CachedList(ac.box.label) // instant first paint from disk
+		ac := &account{store: st, badge: badges[i], box: inbox, syncing: map[string]bool{}, hidden: map[string]time.Time{},
+			unreadOnly: map[string]bool{"INBOX": true}, keep: map[string]bool{}, inboxUnread: -1}
+		ac.threads = st.CachedList(ac.view()) // instant first paint from disk
 		ac.loaded = ac.threads != nil
 		m.accts = append(m.accts, ac)
 	}
@@ -143,17 +184,21 @@ func (m *Model) Init() tea.Cmd {
 
 func (m *Model) sync(i int) tea.Cmd {
 	a := m.accts[i]
-	label := a.box.label
-	if a.syncing[label] {
+	view := a.view()
+	if a.syncing[view] {
 		return nil
 	}
-	a.syncing[label] = true
+	a.syncing[view] = true
 	st := a.store
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		list, err := st.SyncList(ctx, label)
-		return listMsg{acct: i, label: label, threads: list, err: err}
+		list, err := st.SyncList(ctx, view)
+		unread, uerr := st.InboxUnread(ctx)
+		if uerr != nil {
+			unread = -1
+		}
+		return listMsg{acct: i, view: view, threads: list, unread: unread, err: err}
 	}
 }
 
@@ -248,20 +293,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case listMsg:
 		a := m.accts[msg.acct]
-		delete(a.syncing, msg.label)
+		delete(a.syncing, msg.view)
 		if msg.err != nil {
 			a.err = msg.err
 			return m, nil
 		}
 		a.err, a.lastSync = nil, time.Now()
-		if msg.label != a.box.label {
+		if msg.unread >= 0 {
+			a.inboxUnread = msg.unread
+		}
+		if msg.view != a.view() {
 			return m, nil // user switched mailbox meanwhile
 		}
 		var selID string
 		if s := a.selected(); s != nil {
 			selID = s.ID
 		}
-		a.threads, a.loaded = a.visible(msg.threads), true
+		a.threads, a.loaded = a.withKept(a.visible(msg.threads)), true
 		if i := slices.IndexFunc(a.threads, func(s gmail.Summary) bool { return s.ID == selID }); i >= 0 {
 			a.sel = i
 		}
@@ -352,7 +400,10 @@ func (m *Model) onKey(key string) tea.Cmd {
 	case "]":
 		return m.switchAccount((m.cur + 1) % len(m.accts))
 	case "ctrl+r":
+		clear(a.keep) // a manual refresh drops threads read meanwhile, like Gmail
 		return m.sync(m.cur)
+	case "U":
+		return m.toggleUnread()
 	case "c", "r", "a", "f":
 		return m.startCompose(key)
 	case "e":
@@ -432,9 +483,10 @@ func (m *Model) openReader() tea.Cmd {
 	if !s.Unread {
 		return nil
 	}
-	s.Unread = false
+	a.setUnread(s, false)
 	id, st := s.ID, a.store
-	st.SaveCachedList(a.box.label, a.threads)
+	a.keepRead(id)
+	st.SaveCachedList(a.view(), a.threads)
 	return m.background(m.cur, func(ctx context.Context) error { return st.Modify(ctx, id, nil, []string{"UNREAD"}) })
 }
 
@@ -451,10 +503,48 @@ func (m *Model) switchMailbox(box mailbox) tea.Cmd {
 	if a.box == box {
 		return nil
 	}
-	a.box, a.sel, a.top, m.focus = box, 0, 0, focusList
-	a.threads = a.store.CachedList(box.label)
+	a.box = box
+	return m.reloadView()
+}
+
+// toggleUnread switches the current mailbox between unread-only and everything.
+func (m *Model) toggleUnread() tea.Cmd {
+	a := m.acct()
+	a.unreadOnly[a.box.label] = !a.unreadOnly[a.box.label]
+	text := "Showing all conversations"
+	if a.unreadOnly[a.box.label] {
+		text = "Showing unread only"
+	}
+	return tea.Batch(m.reloadView(), m.flashMsg(text, false))
+}
+
+// reloadView shows the current view from cache, then syncs it.
+func (m *Model) reloadView() tea.Cmd {
+	a := m.acct()
+	a.sel, a.top, m.focus = 0, 0, focusList
+	clear(a.keep)
+	a.threads = a.store.CachedList(a.view())
 	a.loaded = a.threads != nil
 	return tea.Batch(m.selectionChanged(), m.sync(m.cur))
+}
+
+// withKept merges threads read during this unread-only session back into a
+// freshly synced list, newest first.
+func (a *account) withKept(list []gmail.Summary) []gmail.Summary {
+	if len(a.keep) == 0 || !a.unreadOnly[a.box.label] {
+		return list
+	}
+	have := map[string]bool{}
+	for _, s := range list {
+		have[s.ID] = true
+	}
+	for _, s := range a.threads {
+		if a.keep[s.ID] && !have[s.ID] {
+			list = append(list, s)
+		}
+	}
+	slices.SortStableFunc(list, func(x, y gmail.Summary) int { return y.Date.Compare(x.Date) })
+	return list
 }
 
 func clamp(v, lo, hi int) int {

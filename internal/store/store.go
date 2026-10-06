@@ -22,7 +22,7 @@ import (
 )
 
 // cacheVersion is bumped whenever gmail.Summarize changes, invalidating cached lists.
-const cacheVersion = 2
+const cacheVersion = 4
 
 // PageSize is how many threads a mailbox shows.
 const PageSize = 50
@@ -70,23 +70,27 @@ func (a *Account) Client(ctx context.Context) (*gmail.Client, error) {
 	return a.client, a.clientErr
 }
 
-// CachedList returns the mailbox as last synced (nil if never synced).
-func (a *Account) CachedList(label string) []gmail.Summary {
+// A view names a list of threads: label IDs joined by "+", e.g. "INBOX",
+// "INBOX+UNREAD", or "" for all mail.
+
+// CachedList returns the view as last synced (nil if never synced).
+func (a *Account) CachedList(view string) []gmail.Summary {
 	var list []gmail.Summary
-	if !a.readJSON(listFile(label), &list) {
+	if !a.readJSON(listFile(view), &list) {
 		return nil
 	}
 	a.remember(list, false)
 	return list
 }
 
-// SyncList fetches the mailbox, re-downloading only threads whose historyId changed.
-func (a *Account) SyncList(ctx context.Context, label string) ([]gmail.Summary, error) {
+// SyncList fetches the view, re-downloading only threads whose historyId changed.
+func (a *Account) SyncList(ctx context.Context, view string) ([]gmail.Summary, error) {
 	c, err := a.Client(ctx)
 	if err != nil {
 		return nil, err
 	}
-	refs, err := c.ListThreads(ctx, label, PageSize)
+	labels, query := viewQuery(view)
+	refs, err := c.ListThreads(ctx, labels, query, PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +123,7 @@ func (a *Account) SyncList(ctx context.Context, label string) ([]gmail.Summary, 
 		return nil, firstErr
 	}
 	a.remember(out, true)
-	a.writeJSON(listFile(label), out)
+	a.writeJSON(listFile(view), out)
 	return out, nil
 }
 
@@ -152,6 +156,32 @@ func (a *Account) Modify(ctx context.Context, id string, add, remove []string) e
 	}
 	a.invalidate(id)
 	return nil
+}
+
+// MarkUnread marks the latest message of a thread unread, like Gmail does
+// (marking the whole thread would flag every message).
+func (a *Account) MarkUnread(ctx context.Context, threadID, lastMsgID string) error {
+	if lastMsgID == "" {
+		return a.Modify(ctx, threadID, []string{"UNREAD"}, nil)
+	}
+	c, err := a.Client(ctx)
+	if err != nil {
+		return err
+	}
+	if err := c.ModifyMessage(ctx, lastMsgID, []string{"UNREAD"}, nil); err != nil {
+		return err
+	}
+	a.invalidate(threadID)
+	return nil
+}
+
+// InboxUnread is the true number of unread inbox conversations.
+func (a *Account) InboxUnread(ctx context.Context) (int, error) {
+	c, err := a.Client(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return c.UnreadThreads(ctx, "INBOX")
 }
 
 // Trash moves a thread to the trash. Gmail drops the INBOX label when
@@ -203,13 +233,35 @@ func (a *Account) invalidate(id string) {
 }
 
 // SaveCachedList persists a locally modified list so a restart shows it as is.
-func (a *Account) SaveCachedList(label string, list []gmail.Summary) {
-	a.writeJSON(listFile(label), list)
+func (a *Account) SaveCachedList(view string, list []gmail.Summary) {
+	a.writeJSON(listFile(view), list)
 }
 
 // remember indexes summaries. Cached (possibly stale) lists never overwrite
 // fresher in-memory entries; synced lists always do.
-func listFile(label string) string { return fmt.Sprintf("list-%s.v%d.json", label, cacheVersion) }
+// viewQuery turns a view into a Gmail request. Unread views use search, which
+// matches per message ("a message both unread and in the inbox", as in
+// Gmail's Unread section); labelIds match per thread, so a thread with a read
+// inbox message and an unread archived one would wrongly count as unread.
+func viewQuery(view string) (labels []string, query string) {
+	base, unread := strings.CutSuffix(view, "+UNREAD")
+	if view == "UNREAD" {
+		base, unread = "", true
+	}
+	if !unread {
+		if view == "" {
+			return nil, ""
+		}
+		return strings.Split(view, "+"), ""
+	}
+	op := map[string]string{"": "", "INBOX": "in:inbox", "STARRED": "is:starred", "SENT": "in:sent", "DRAFT": "in:drafts"}[base]
+	if op == "" && base != "" {
+		op = "label:" + base
+	}
+	return nil, strings.TrimSpace(op + " is:unread")
+}
+
+func listFile(view string) string { return fmt.Sprintf("list-%s.v%d.json", view, cacheVersion) }
 
 func (a *Account) remember(list []gmail.Summary, fresh bool) {
 	a.mu.Lock()

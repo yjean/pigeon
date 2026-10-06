@@ -91,6 +91,7 @@ type Summary struct {
 	Count     int       `json:"count"`
 	Unread    bool      `json:"unread"`
 	Starred   bool      `json:"starred"`
+	LastID    string    `json:"last_id"` // latest message, the one "mark unread" applies to
 }
 
 // Summarize builds the list row of a thread fetched with GetThread.
@@ -102,7 +103,7 @@ func Summarize(t *Thread, me string) Summary {
 	}
 	s.Subject = t.Messages[0].Header("Subject")
 	last := t.Messages[len(t.Messages)-1]
-	s.Date = last.Time()
+	s.Date, s.LastID = last.Time(), last.ID
 	if last.Snippet != "" {
 		s.Snippet = html.UnescapeString(last.Snippet)
 	}

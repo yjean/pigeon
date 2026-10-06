@@ -59,17 +59,33 @@ type Thread struct {
 	Messages  []Message `json:"messages"`
 }
 
-// ListThreads returns the most recent threads carrying labelID ("" = all mail).
-func (c *Client) ListThreads(ctx context.Context, labelID string, max int) ([]Thread, error) {
+// ListThreads returns the most recent threads carrying all labelIDs (none =
+// all mail) and matching the Gmail search query (may be empty).
+func (c *Client) ListThreads(ctx context.Context, labelIDs []string, query string, max int) ([]Thread, error) {
+	threads, _, err := c.listThreads(ctx, labelIDs, query, max)
+	return threads, err
+}
+
+// CountThreads estimates how many threads match (Gmail's resultSizeEstimate).
+func (c *Client) CountThreads(ctx context.Context, labelIDs []string, query string) (int, error) {
+	_, n, err := c.listThreads(ctx, labelIDs, query, 1)
+	return n, err
+}
+
+func (c *Client) listThreads(ctx context.Context, labelIDs []string, query string, max int) ([]Thread, int, error) {
 	q := url.Values{"maxResults": {fmt.Sprint(max)}}
-	if labelID != "" {
-		q.Set("labelIds", labelID)
+	for _, l := range labelIDs {
+		q.Add("labelIds", l)
+	}
+	if query != "" {
+		q.Set("q", query)
 	}
 	var resp struct {
-		Threads []Thread `json:"threads"`
+		Threads            []Thread `json:"threads"`
+		ResultSizeEstimate int      `json:"resultSizeEstimate"`
 	}
 	err := c.do(ctx, http.MethodGet, "threads", q, nil, &resp)
-	return resp.Threads, err
+	return resp.Threads, resp.ResultSizeEstimate, err
 }
 
 // GetThread fetches a thread: headers only (full=false) or with bodies (full=true).
@@ -92,6 +108,21 @@ func (c *Client) GetThread(ctx context.Context, id string, full bool) (*Thread, 
 func (c *Client) ModifyThread(ctx context.Context, id string, add, remove []string) error {
 	body := map[string][]string{"addLabelIds": add, "removeLabelIds": remove}
 	return c.do(ctx, http.MethodPost, "threads/"+url.PathEscape(id)+"/modify", nil, body, nil)
+}
+
+// ModifyMessage adds/removes labels on a single message.
+func (c *Client) ModifyMessage(ctx context.Context, id string, add, remove []string) error {
+	body := map[string][]string{"addLabelIds": add, "removeLabelIds": remove}
+	return c.do(ctx, http.MethodPost, "messages/"+url.PathEscape(id)+"/modify", nil, body, nil)
+}
+
+// UnreadThreads returns the number of unread threads carrying a label (e.g. INBOX).
+func (c *Client) UnreadThreads(ctx context.Context, label string) (int, error) {
+	var resp struct {
+		ThreadsUnread int `json:"threadsUnread"`
+	}
+	err := c.do(ctx, http.MethodGet, "labels/"+url.PathEscape(label), nil, nil, &resp)
+	return resp.ThreadsUnread, err
 }
 
 // TrashThread moves a thread to the trash.

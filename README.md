@@ -76,7 +76,8 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
 | `ctrl+e` | edit the body in `$EDITOR` (in compose) |
 | `tab` / `shift+tab` | next / previous field (in compose) |
 | `esc` | close compose: save draft, discard, or keep editing |
-| `ctrl+r` | sync now (also every 60 s) |
+| `U` | toggle unread only / all conversations (the inbox starts unread-only) |
+| `ctrl+r` | sync now (also every 60 s); drops conversations read meanwhile from the unread view |
 | `?` | help |
 
 ## Design notes
