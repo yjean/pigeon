@@ -37,3 +37,13 @@ func TestAccountStore(t *testing.T) {
 		t.Fatalf("unexpected accounts after remove: %+v", got)
 	}
 }
+
+func TestBadgesUnique(t *testing.T) {
+	got := Badges([]Account{{Email: "yoann.jean@gmail.com"}, {Email: "yoann@42.works"}, {Email: "yoann.jean@ispd.com"}, {Email: "yoann.jade@ispd.com"}})
+	want := []string{"YG", "YO", "YI", "Y2"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v want %v", got, want)
+		}
+	}
+}

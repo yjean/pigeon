@@ -74,8 +74,9 @@ func tui() error {
 		return nil
 	}
 	fmt.Println("The TUI is not built yet — next iteration. Accounts ready:")
-	for _, a := range accounts {
-		fmt.Printf("  [%s] %s\n", a.Initials(), a.Email)
+	badges := config.Badges(accounts)
+	for i, a := range accounts {
+		fmt.Printf("  [%s] %s\n", badges[i], a.Email)
 	}
 	return nil
 }
@@ -157,9 +158,10 @@ func accountList(ctx context.Context, check bool) error {
 		}
 		wg.Wait()
 	}
+	badges := config.Badges(accounts)
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	for i, a := range accounts {
-		fmt.Fprintf(w, "%d\t[%s]\t%s\t%s\t%s\n", i+1, a.Initials(), a.Email, a.AddedAt.Local().Format("2006-01-02"), status[i])
+		fmt.Fprintf(w, "%d\t[%s]\t%s\t%s\t%s\n", i+1, badges[i], a.Email, a.AddedAt.Local().Format("2006-01-02"), status[i])
 	}
 	return w.Flush()
 }

@@ -61,6 +61,33 @@ func (a Account) Initials() string {
 	}
 }
 
+// Badges returns one unique 2-letter badge per account, in order.
+// Clashing initials fall back to first letter of the local part + of the domain
+// (yoann.jean@gmail.com → YG, yoann.jean@ispd.com → YI), then to a numeric suffix.
+func Badges(accounts []Account) []string {
+	count := map[string]int{}
+	for _, a := range accounts {
+		count[a.Initials()]++
+	}
+	out := make([]string, len(accounts))
+	used := map[string]bool{}
+	for i, a := range accounts {
+		b := a.Initials()
+		if count[b] > 1 {
+			local, domain, _ := strings.Cut(a.Email, "@")
+			if local != "" && domain != "" {
+				b = strings.ToUpper(local[:1] + domain[:1])
+			}
+		}
+		for n := 2; used[b]; n++ {
+			b = fmt.Sprintf("%s%d", b[:1], n)
+		}
+		used[b] = true
+		out[i] = b
+	}
+	return out
+}
+
 type accountsFile struct {
 	Accounts []Account `json:"accounts"`
 }
