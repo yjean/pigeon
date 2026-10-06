@@ -11,6 +11,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -44,6 +45,8 @@ type Account struct {
 
 	meOnce sync.Once
 	me     gmail.Address
+
+	historyID string // last seen mailbox history ID (Changes)
 }
 
 func Open(email string) (*Account, error) {
@@ -174,6 +177,46 @@ func (a *Account) MarkUnread(ctx context.Context, threadID, lastMsgID string) er
 	}
 	a.invalidate(threadID)
 	return nil
+}
+
+// Changed reports whether anything changed in the mailbox since the last
+// call, using Gmail's history (one cheap request). The first call only sets
+// the baseline. Touched threads are invalidated so the next sync refetches them.
+func (a *Account) Changed(ctx context.Context) (bool, error) {
+	c, err := a.Client(ctx)
+	if err != nil {
+		return false, err
+	}
+	a.mu.Lock()
+	start := a.historyID
+	a.mu.Unlock()
+	if start == "" {
+		id, err := c.HistoryID(ctx)
+		if err != nil {
+			return false, err
+		}
+		a.mu.Lock()
+		a.historyID = id
+		a.mu.Unlock()
+		return false, nil
+	}
+	threads, latest, err := c.Changes(ctx, start)
+	if errors.Is(err, gmail.ErrHistoryExpired) {
+		a.mu.Lock()
+		a.historyID = ""
+		a.mu.Unlock()
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	a.mu.Lock()
+	a.historyID = latest
+	a.mu.Unlock()
+	for _, id := range threads {
+		a.invalidate(id)
+	}
+	return len(threads) > 0, nil
 }
 
 // InboxUnread is the true number of unread inbox conversations.

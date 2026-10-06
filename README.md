@@ -21,7 +21,7 @@ A fast, keyboard-driven Gmail client for the terminal, inspired by [slk](https:/
 - [x] Archive / trash / star / mark unread, with undo
 - [ ] Labels sidebar
 - [x] Search (`/`, Gmail search syntax)
-- [ ] Push-style sync (Gmail history API) instead of 60 s polling
+- [x] Near-instant sync: Gmail history polled every 10 s (≈2 quota units), plus on terminal focus
 
 ## Build
 
@@ -78,7 +78,7 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
 | `esc` | close compose: save draft, discard, or keep editing |
 | `/` | search with Gmail syntax (`from:` `subject:` `has:attachment` `after:2026/09/01` …); `esc` leaves the results |
 | `U` | toggle unread only / all conversations (the inbox starts unread-only) |
-| `ctrl+r` | sync now (also every 60 s); drops conversations read meanwhile from the unread view |
+| `ctrl+r` | sync now (changes also arrive within ~10 s); drops conversations read meanwhile from the unread view |
 | `?` | help |
 
 ## Design notes

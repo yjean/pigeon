@@ -34,7 +34,8 @@ var (
 )
 
 const (
-	syncEvery    = 60 * time.Second
+	pollEvery    = 10 * time.Second      // cheap Gmail history check, per account
+	syncEvery    = 5 * time.Minute       // full re-list as a safety net
 	openDebounce = 40 * time.Millisecond // don't fetch every thread while holding j
 )
 
@@ -159,6 +160,11 @@ type (
 	}
 	openTick struct{ seq int }
 	syncTick struct{}
+	pollTick struct{}
+	pollMsg  struct {
+		acct    int
+		changed bool
+	}
 )
 
 // Run starts the TUI.
@@ -183,7 +189,8 @@ func Run(accounts []config.Account) error {
 func (m *Model) acct() *account { return m.accts[m.cur] }
 
 func (m *Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{m.selectionChanged(), tea.Tick(syncEvery, func(time.Time) tea.Msg { return syncTick{} })}
+	cmds := []tea.Cmd{m.selectionChanged(), tea.Tick(syncEvery, func(time.Time) tea.Msg { return syncTick{} }),
+		m.poll(), tea.Tick(pollEvery, func(time.Time) tea.Msg { return pollTick{} })}
 	for i := range m.accts {
 		cmds = append(cmds, m.sync(i))
 	}
@@ -354,6 +361,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case actionMsg:
 		return m, m.onAction(msg)
+
+	case pollTick:
+		return m, tea.Batch(m.poll(), tea.Tick(pollEvery, func(time.Time) tea.Msg { return pollTick{} }))
+
+	case tea.FocusMsg: // back to the terminal: check right away
+		return m, m.poll()
+
+	case pollMsg:
+		if msg.changed {
+			return m, m.sync(msg.acct)
+		}
 
 	case syncTick:
 		cmds := []tea.Cmd{tea.Tick(syncEvery, func(time.Time) tea.Msg { return syncTick{} })}
@@ -574,4 +592,20 @@ func clamp(v, lo, hi int) int {
 		return lo
 	}
 	return max(lo, min(v, hi))
+}
+
+// poll asks Gmail, for every account, whether anything changed since the last
+// poll; changed accounts get their current view re-synced.
+func (m *Model) poll() tea.Cmd {
+	cmds := make([]tea.Cmd, len(m.accts))
+	for i, a := range m.accts {
+		st := a.store
+		cmds[i] = func() tea.Msg {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			changed, err := st.Changed(ctx)
+			return pollMsg{acct: i, changed: changed && err == nil}
+		}
+	}
+	return tea.Batch(cmds...)
 }

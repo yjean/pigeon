@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -108,6 +109,56 @@ func (c *Client) GetThread(ctx context.Context, id string, full bool) (*Thread, 
 func (c *Client) ModifyThread(ctx context.Context, id string, add, remove []string) error {
 	body := map[string][]string{"addLabelIds": add, "removeLabelIds": remove}
 	return c.do(ctx, http.MethodPost, "threads/"+url.PathEscape(id)+"/modify", nil, body, nil)
+}
+
+// ErrHistoryExpired means the start history ID is too old: do a full sync.
+var ErrHistoryExpired = errors.New("gmail: history expired")
+
+// HistoryID returns the mailbox's current history ID.
+func (c *Client) HistoryID(ctx context.Context) (string, error) {
+	var p struct {
+		HistoryID string `json:"historyId"`
+	}
+	err := c.do(ctx, http.MethodGet, "profile", nil, nil, &p)
+	return p.HistoryID, err
+}
+
+// Changes lists the threads touched since startHistoryID and the new history ID.
+// It costs ~2 quota units, so it can be polled often.
+func (c *Client) Changes(ctx context.Context, startHistoryID string) (threadIDs []string, latest string, err error) {
+	seen := map[string]bool{}
+	q := url.Values{"startHistoryId": {startHistoryID}, "maxResults": {"500"}}
+	for {
+		var resp struct {
+			History []struct {
+				Messages []struct {
+					ThreadID string `json:"threadId"`
+				} `json:"messages"`
+			} `json:"history"`
+			HistoryID     string `json:"historyId"`
+			NextPageToken string `json:"nextPageToken"`
+		}
+		if err := c.do(ctx, http.MethodGet, "history", q, nil, &resp); err != nil {
+			var apiErr *APIError
+			if errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound {
+				return nil, "", ErrHistoryExpired
+			}
+			return nil, "", err
+		}
+		for _, h := range resp.History {
+			for _, m := range h.Messages {
+				if !seen[m.ThreadID] {
+					seen[m.ThreadID] = true
+					threadIDs = append(threadIDs, m.ThreadID)
+				}
+			}
+		}
+		latest = resp.HistoryID
+		if resp.NextPageToken == "" {
+			return threadIDs, latest, nil
+		}
+		q.Set("pageToken", resp.NextPageToken)
+	}
 }
 
 // ModifyMessage adds/removes labels on a single message.
