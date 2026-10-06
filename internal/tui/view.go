@@ -40,7 +40,7 @@ const railW = 6
 func (m *Model) View() tea.View {
 	v := tea.NewView(m.render())
 	v.AltScreen = true
-	v.WindowTitle = "pigeon"
+	v.WindowTitle = m.acct().store.Email + " | Pigeon"
 	return v
 }
 
