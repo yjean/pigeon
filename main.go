@@ -14,6 +14,7 @@ import (
 
 	"github.com/yoann/pigeon/internal/auth"
 	"github.com/yoann/pigeon/internal/config"
+	"github.com/yoann/pigeon/internal/tui"
 )
 
 const version = "0.1.0-dev"
@@ -21,7 +22,7 @@ const version = "0.1.0-dev"
 const usage = `pigeon 🐦 — Gmail in your terminal
 
 Usage:
-  pigeon                          launch the TUI (coming soon)
+  pigeon                          launch the TUI
   pigeon setup <client.json>      install your Google OAuth "Desktop app" client
   pigeon account add [email]      authorize a Gmail account in the browser
   pigeon account list [--check]   list accounts (--check verifies each token live)
@@ -45,7 +46,7 @@ func main() {
 
 func run(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return tui()
+		return launch()
 	}
 	switch args[0] {
 	case "setup":
@@ -64,7 +65,7 @@ func run(ctx context.Context, args []string) error {
 	}
 }
 
-func tui() error {
+func launch() error {
 	accounts, err := config.LoadAccounts()
 	if err != nil {
 		return err
@@ -73,12 +74,7 @@ func tui() error {
 		fmt.Print("No accounts yet. Add one with `pigeon account add`.\n\n", usage)
 		return nil
 	}
-	fmt.Println("The TUI is not built yet — next iteration. Accounts ready:")
-	badges := config.Badges(accounts)
-	for i, a := range accounts {
-		fmt.Printf("  [%s] %s\n", badges[i], a.Email)
-	}
-	return nil
+	return tui.Run(accounts)
 }
 
 func cmdSetup(args []string) error {

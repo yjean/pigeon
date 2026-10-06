@@ -15,9 +15,12 @@ A fast, keyboard-driven Gmail client for the terminal, inspired by [slk](https:/
 
 - [x] CLI skeleton
 - [x] Add / list / remove Gmail accounts (OAuth 2.0 + PKCE, tokens in macOS Keychain)
-- [ ] TUI: account rail, mail list, reading pane
+- [x] TUI: account rail, thread list, reading pane, status bar
+- [x] Disk cache: instant startup, incremental sync (by thread historyId), prefetch
 - [ ] Compose / reply / forward
-- [ ] Local cache + sync (Gmail history API)
+- [ ] Archive / trash / star / labels sidebar
+- [ ] Search
+- [ ] Push-style sync (Gmail history API) instead of 60 s polling
 
 ## Build
 
@@ -51,6 +54,21 @@ pigeon account list --check        # verify tokens against Gmail
 pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
 ```
 
+## Keybindings
+
+| Keys | Action |
+|---|---|
+| `j` / `k`, `↓` / `↑` | next / previous conversation (scroll when reading) |
+| `J` / `K` | next / previous conversation, from anywhere |
+| `enter` `l` `tab` | read the conversation (marks it read) |
+| `esc` `h` `q` | back to the list |
+| `gg` / `G` | top / bottom |
+| `space`, `ctrl+d` / `ctrl+u` | scroll the conversation |
+| `1`–`9`, `[` / `]` | switch account |
+| `gi` `gs` `gt` `gd` `ga` | inbox, starred, sent, drafts, all mail |
+| `r` | sync now (also every 60 s) |
+| `?` | help |
+
 ## Design notes
 
 - **Go**: single static binary, ~10 ms startup, and Bubble Tea for the upcoming TUI.
@@ -60,4 +78,6 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
 - **Config**: `~/.config/pigeon/` (`$XDG_CONFIG_HOME` respected)
   - `credentials.json`: OAuth client (0600)
   - `accounts.json`: ordered account list (= rail order)
+- **Cache**: `~/.cache/pigeon/<email>/` (`$XDG_CACHE_HOME` respected), files 0600.
+  First paint comes from disk (~1 ms); a sync re-downloads only threads whose `historyId` changed.
 - Gmail REST is called directly over `net/http` (no heavy generated SDK), so the binary stays small.
