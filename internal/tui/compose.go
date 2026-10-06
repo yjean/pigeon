@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/yoann/pigeon/internal/config"
 	"github.com/yoann/pigeon/internal/gmail"
 	"github.com/yoann/pigeon/internal/store"
 )
@@ -259,8 +260,9 @@ const composeChrome = 8 // title, note, to, cc, subject, attach, rule, footer
 func (m *Model) startCompose(kind string) tea.Cmd {
 	a := m.acct()
 	me := gmail.Address{Email: a.store.Email}
+	sig := config.Signature(a.store.Email)
 	if kind == "c" {
-		c, cmd := newComposer("New message", m.cur, gmail.Outgoing{}, fTo)
+		c, cmd := newComposer("New message", m.cur, gmail.Outgoing{Body: withSignature("", sig)}, fTo)
 		return m.openComposer(c, cmd)
 	}
 	s := a.selected()
@@ -273,13 +275,14 @@ func (m *Model) startCompose(kind string) tea.Cmd {
 	t := m.openThread
 	var c *composer
 	var cmd tea.Cmd
+	sign := func(o gmail.Outgoing) gmail.Outgoing { o.Body = withSignature(o.Body, sig); return o }
 	switch kind {
 	case "r":
-		c, cmd = newComposer("Reply", m.cur, gmail.Reply(t, me, false), fBody)
+		c, cmd = newComposer("Reply", m.cur, sign(gmail.Reply(t, me, false)), fBody)
 	case "a":
-		c, cmd = newComposer("Reply all", m.cur, gmail.Reply(t, me, true), fBody)
+		c, cmd = newComposer("Reply all", m.cur, sign(gmail.Reply(t, me, true)), fBody)
 	case "f":
-		c, cmd = newComposer("Forward", m.cur, gmail.Forward(t, me), fTo)
+		c, cmd = newComposer("Forward", m.cur, sign(gmail.Forward(t, me)), fTo)
 		for _, att := range t.Messages[len(t.Messages)-1].AttachmentParts() {
 			if !att.Inline {
 				c.atts = append(c.atts, composeAtt{name: att.Filename, size: att.Size, remote: &att})
@@ -288,6 +291,15 @@ func (m *Model) startCompose(kind string) tea.Cmd {
 		c.initAtts = len(c.atts)
 	}
 	return m.openComposer(c, cmd)
+}
+
+// withSignature puts the signature under the text being written, above any
+// quoted or forwarded message (body starts with the blank lines to write in).
+func withSignature(body, sig string) string {
+	if sig == "" {
+		return body
+	}
+	return "\n\n" + sig + body
 }
 
 func (m *Model) openComposer(c *composer, cmd tea.Cmd) tea.Cmd {

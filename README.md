@@ -18,6 +18,7 @@ A fast, keyboard-driven Gmail client for the terminal, inspired by [slk](https:/
 - [x] TUI: account rail, thread list, reading pane, status bar
 - [x] Disk cache: instant startup, incremental sync (by thread historyId), prefetch
 - [x] Compose / reply / reply all / forward (in-app editor or `$EDITOR`), save drafts
+- [x] Signatures, one per account (plain text, see Config below)
 - [x] Attachments: attach files (`ctrl+a` browser or drag & drop), forward with attachments; 📎 on list rows
 - [x] Archive / trash / star / mark unread, with undo
 - [ ] Labels sidebar
@@ -106,6 +107,9 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
 - **Config**: `~/.config/pigeon/` (`$XDG_CONFIG_HOME` respected)
   - `credentials.json`: OAuth client (0600)
   - `accounts.json`: ordered account list (= rail order)
+  - `signatures/<email>.txt`: the account's signature, inserted verbatim under what you
+    write (above the quote in replies and forwards). Start it with `-- ` (dash dash space)
+    so mail clients recognize it. No file, no signature.
 - **Contacts** for autocomplete: `~/.cache/pigeon/<email>/contacts.json`, built from the
   recipients of your last 500 sent emails (then incrementally) and the senders of synced mail.
   No Contacts API scope needed.

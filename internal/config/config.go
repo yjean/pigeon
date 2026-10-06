@@ -41,6 +41,24 @@ func CredentialsPath() (string, error) { return path("credentials.json") }
 
 func accountsPath() (string, error) { return path("accounts.json") }
 
+// SignaturePath is the plain-text signature of an account.
+func SignaturePath(email string) (string, error) {
+	return path(filepath.Join("signatures", strings.ToLower(email)+".txt"))
+}
+
+// Signature returns the account's signature, used verbatim ("" if none).
+func Signature(email string) string {
+	p, err := SignaturePath(email)
+	if err != nil {
+		return ""
+	}
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimRight(string(data), " \t\r\n")
+}
+
 // Account is one Gmail account. Order in the store is the sidebar order.
 type Account struct {
 	Email   string    `json:"email"`

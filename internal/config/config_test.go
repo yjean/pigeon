@@ -47,3 +47,17 @@ func TestBadgesUnique(t *testing.T) {
 		}
 	}
 }
+
+func TestSignature(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	if s := Signature("me@x.io"); s != "" {
+		t.Fatalf("no file should mean no signature, got %q", s)
+	}
+	p, _ := SignaturePath("Me@X.io")
+	if err := WriteFileAtomic(p, []byte("-- \nMe\n(me@x.io)\n\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if s := Signature("me@x.io"); s != "-- \nMe\n(me@x.io)" {
+		t.Fatalf("got %q", s)
+	}
+}

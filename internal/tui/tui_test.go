@@ -137,3 +137,15 @@ func TestQuitAsksFirst(t *testing.T) {
 		t.Fatal("q q should quit")
 	}
 }
+
+func TestWithSignature(t *testing.T) {
+	if got := withSignature("", "-- \nMe"); got != "\n\n-- \nMe" {
+		t.Fatalf("new message: %q", got)
+	}
+	if got := withSignature("\n\nOn Mon, J wrote:\n> hi", "-- \nMe"); got != "\n\n-- \nMe\n\nOn Mon, J wrote:\n> hi" {
+		t.Fatalf("reply: %q", got)
+	}
+	if got := withSignature("\n\nquoted", ""); got != "\n\nquoted" {
+		t.Fatalf("no signature: %q", got)
+	}
+}
