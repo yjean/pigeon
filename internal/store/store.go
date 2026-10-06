@@ -47,6 +47,8 @@ type Account struct {
 	me     gmail.Address
 
 	historyID string // last seen mailbox history ID (Changes)
+
+	contacts contactBook
 }
 
 func Open(email string) (*Account, error) {
@@ -120,6 +122,7 @@ func (a *Account) SyncList(ctx context.Context, view string) ([]gmail.Summary, e
 				return
 			}
 			out[i] = gmail.Summarize(t, a.Email)
+			a.learnFromThreads([]*gmail.Thread{t})
 		})
 	}
 	wg.Wait()
@@ -128,6 +131,7 @@ func (a *Account) SyncList(ctx context.Context, view string) ([]gmail.Summary, e
 	}
 	a.remember(out, true)
 	a.writeJSON(listFile(view), out)
+	a.saveContacts()
 	return out, nil
 }
 
@@ -361,7 +365,11 @@ func (a *Account) Send(ctx context.Context, o gmail.Outgoing) error {
 		return err
 	}
 	o.From = a.Me(ctx)
-	return c.Send(ctx, o)
+	if err := c.Send(ctx, o); err != nil {
+		return err
+	}
+	a.LearnSent(o)
+	return nil
 }
 
 // SaveDraft stores a message in this account's Drafts.

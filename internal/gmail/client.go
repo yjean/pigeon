@@ -105,6 +105,42 @@ func (c *Client) GetThread(ctx context.Context, id string, full bool) (*Thread, 
 	return &t, err
 }
 
+// ListMessages returns up to max message IDs matching a Gmail search query, newest first.
+func (c *Client) ListMessages(ctx context.Context, query string, max int) ([]string, error) {
+	q := url.Values{"q": {query}, "maxResults": {fmt.Sprint(min(max, 500))}}
+	var ids []string
+	for len(ids) < max {
+		var resp struct {
+			Messages []struct {
+				ID string `json:"id"`
+			} `json:"messages"`
+			NextPageToken string `json:"nextPageToken"`
+		}
+		if err := c.do(ctx, http.MethodGet, "messages", q, nil, &resp); err != nil {
+			return ids, err
+		}
+		for _, m := range resp.Messages {
+			ids = append(ids, m.ID)
+		}
+		if resp.NextPageToken == "" {
+			break
+		}
+		q.Set("pageToken", resp.NextPageToken)
+	}
+	return ids[:min(len(ids), max)], nil
+}
+
+// GetMessageHeaders fetches a message with only the given headers.
+func (c *Client) GetMessageHeaders(ctx context.Context, id string, headers ...string) (*Message, error) {
+	q := url.Values{"format": {"metadata"}}
+	for _, h := range headers {
+		q.Add("metadataHeaders", h)
+	}
+	var m Message
+	err := c.do(ctx, http.MethodGet, "messages/"+url.PathEscape(id), q, nil, &m)
+	return &m, err
+}
+
 // ModifyThread adds/removes labels on every message of a thread.
 func (c *Client) ModifyThread(ctx context.Context, id string, add, remove []string) error {
 	body := map[string][]string{"addLabelIds": add, "removeLabelIds": remove}

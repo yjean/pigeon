@@ -36,6 +36,7 @@ var (
 const (
 	pollEvery    = 10 * time.Second      // cheap Gmail history check, per account
 	syncEvery    = 5 * time.Minute       // full re-list as a safety net
+	harvestDelay = 3 * time.Second       // let the first sync go first
 	openDebounce = 40 * time.Millisecond // don't fetch every thread while holding j
 )
 
@@ -158,10 +159,11 @@ type (
 		thread *gmail.Thread
 		err    error
 	}
-	openTick struct{ seq int }
-	syncTick struct{}
-	pollTick struct{}
-	pollMsg  struct {
+	openTick    struct{ seq int }
+	syncTick    struct{}
+	pollTick    struct{}
+	harvestTick struct{}
+	pollMsg     struct {
 		acct    int
 		changed bool
 	}
@@ -190,7 +192,8 @@ func (m *Model) acct() *account { return m.accts[m.cur] }
 
 func (m *Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{m.selectionChanged(), tea.Tick(syncEvery, func(time.Time) tea.Msg { return syncTick{} }),
-		m.poll(), tea.Tick(pollEvery, func(time.Time) tea.Msg { return pollTick{} })}
+		m.poll(), tea.Tick(pollEvery, func(time.Time) tea.Msg { return pollTick{} }),
+		tea.Tick(harvestDelay, func(time.Time) tea.Msg { return harvestTick{} })}
 	for i := range m.accts {
 		cmds = append(cmds, m.sync(i))
 	}
@@ -364,6 +367,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case pollTick:
 		return m, tea.Batch(m.poll(), tea.Tick(pollEvery, func(time.Time) tea.Msg { return pollTick{} }))
+
+	case harvestTick: // learn addresses from Sent mail, in the background
+		cmds := make([]tea.Cmd, len(m.accts))
+		for i, a := range m.accts {
+			st := a.store
+			cmds[i] = func() tea.Msg {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+				defer cancel()
+				_ = st.HarvestContacts(ctx) // best effort; autocomplete still learns from synced mail
+				return nil
+			}
+		}
+		return m, tea.Batch(cmds...)
 
 	case tea.FocusMsg: // back to the terminal: check right away
 		return m, m.poll()

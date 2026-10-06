@@ -21,6 +21,7 @@ A fast, keyboard-driven Gmail client for the terminal, inspired by [slk](https:/
 - [x] Archive / trash / star / mark unread, with undo
 - [ ] Labels sidebar
 - [x] Search (`/`, Gmail search syntax)
+- [x] Address autocomplete in To/Cc, learned from Sent mail and synced senders
 - [x] Near-instant sync: Gmail history polled every 10 s (≈2 quota units), plus on terminal focus
 
 ## Build
@@ -75,6 +76,7 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
 | `ctrl+enter` / `ctrl+s` | send (in compose; ctrl+enter needs Ghostty, kitty, WezTerm…) |
 | `ctrl+e` | edit the body in `$EDITOR` (in compose) |
 | `tab` / `shift+tab` | next / previous field (in compose) |
+| `↓` `↑` / `ctrl+n` `ctrl+p`, `tab` | choose / accept an address suggestion (To, Cc) |
 | `esc` | close compose: save draft, discard, or keep editing |
 | `/` | search with Gmail syntax (`from:` `subject:` `has:attachment` `after:2026/09/01` …); `esc` leaves the results |
 | `U` | toggle unread only / all conversations (the inbox starts unread-only) |
@@ -94,6 +96,9 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
 - **Config**: `~/.config/pigeon/` (`$XDG_CONFIG_HOME` respected)
   - `credentials.json`: OAuth client (0600)
   - `accounts.json`: ordered account list (= rail order)
+- **Contacts** for autocomplete: `~/.cache/pigeon/<email>/contacts.json`, built from the
+  recipients of your last 500 sent emails (then incrementally) and the senders of synced mail.
+  No Contacts API scope needed.
 - **Cache**: `~/.cache/pigeon/<email>/` (`$XDG_CACHE_HOME` respected), files 0600.
   First paint comes from disk (~1 ms); a sync re-downloads only threads whose `historyId` changed.
 - Gmail REST is called directly over `net/http` (no heavy generated SDK), so the binary stays small.

@@ -13,7 +13,32 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/yoann/pigeon/internal/gmail"
+	"github.com/yoann/pigeon/internal/store"
 )
+
+// suggestionLines renders the autocomplete dropdown under field f.
+func (c *composer) suggestionLines(f composeField, w int) []string {
+	if c.field != f || len(c.sugg) == 0 {
+		return nil
+	}
+	out := make([]string, len(c.sugg))
+	for i, s := range c.sugg {
+		name, email := s.Name, s.Email
+		if name == "" {
+			name, email = s.Email, ""
+		}
+		if i == c.suggIdx {
+			sel := lipgloss.NewStyle().Background(cSelBg)
+			line := sel.Foreground(cSelBar).Render("▸ ") + sel.Foreground(text).Bold(true).Render(name) +
+				sel.Foreground(overlay1).Render("  "+email+" ")
+			out[i] = strings.Repeat(" ", 11) + line
+		} else {
+			out[i] = strings.Repeat(" ", 13) + sBase.Render(name) + sDim.Render("  "+email)
+		}
+		out[i] = fit(out[i], w)
+	}
+	return out
+}
 
 type composeField int
 
@@ -38,6 +63,11 @@ type composer struct {
 	confirm bool   // esc pressed on a modified message: save / discard?
 	busy    string // "Sending…"
 	err     error
+
+	// Address autocomplete for To/Cc.
+	suggest func(typed string, exclude []string, n int) []store.Contact
+	sugg    []store.Contact
+	suggIdx int
 }
 
 type (
@@ -93,7 +123,7 @@ func newComposer(title string, acct int, o gmail.Outgoing, field composeField) (
 }
 
 func (c *composer) focus(f composeField) tea.Cmd {
-	c.field = f
+	c.field, c.sugg = f, nil
 	c.to.Blur()
 	c.cc.Blur()
 	c.subject.Blur()
@@ -113,16 +143,66 @@ func (c *composer) focus(f composeField) tea.Cmd {
 func (c *composer) update(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd
 	switch c.field {
-	case fTo:
-		c.to, cmd = c.to.Update(msg)
-	case fCc:
-		c.cc, cmd = c.cc.Update(msg)
+	case fTo, fCc:
+		// Only re-suggest when the text changed: cursor blinks also pass here
+		// and must not reset the highlighted suggestion.
+		ti := c.addressInput()
+		before := ti.Value()
+		*ti, cmd = ti.Update(msg)
+		if ti.Value() != before {
+			c.refreshSuggestions()
+		}
 	case fSubject:
 		c.subject, cmd = c.subject.Update(msg)
 	default:
 		c.body, cmd = c.body.Update(msg)
 	}
 	return cmd
+}
+
+// addressInput is the focused To/Cc input, or nil.
+func (c *composer) addressInput() *textinput.Model {
+	switch c.field {
+	case fTo:
+		return &c.to
+	case fCc:
+		return &c.cc
+	}
+	return nil
+}
+
+// splitLast splits "a@x, Bob <b@y>, jul" into the complete part and the token being typed.
+func splitLast(v string) (done, typed string) {
+	if i := strings.LastIndexAny(v, ",;"); i >= 0 {
+		return v[:i+1], v[i+1:]
+	}
+	return "", v
+}
+
+func (c *composer) refreshSuggestions() {
+	ti := c.addressInput()
+	c.sugg, c.suggIdx = nil, 0
+	if ti == nil || c.suggest == nil {
+		return
+	}
+	done, typed := splitLast(ti.Value())
+	var exclude []string
+	for _, a := range append(gmail.ParseAddressList(done), gmail.ParseAddressList(c.to.Value()+","+c.cc.Value())...) {
+		exclude = append(exclude, a.Email)
+	}
+	c.sugg = c.suggest(typed, exclude, 5)
+}
+
+// acceptSuggestion replaces the token being typed with the chosen address.
+func (c *composer) acceptSuggestion() {
+	ti := c.addressInput()
+	done, _ := splitLast(ti.Value())
+	if done = strings.TrimSpace(done); done != "" {
+		done += " "
+	}
+	ti.SetValue(done + c.sugg[c.suggIdx].Address().Format() + ", ")
+	ti.CursorEnd()
+	c.sugg = nil
 }
 
 func (c *composer) outgoing() gmail.Outgoing {
@@ -183,6 +263,7 @@ func (m *Model) startCompose(kind string) tea.Cmd {
 }
 
 func (m *Model) openComposer(c *composer, cmd tea.Cmd) tea.Cmd {
+	c.suggest = m.accts[c.acct].store.Suggest
 	m.composer, m.help = c, false
 	m.sizeComposer()
 	return cmd
@@ -213,6 +294,22 @@ func (m *Model) composeKey(msg tea.KeyPressMsg) tea.Cmd {
 			c.confirm = false
 		}
 		return nil
+	}
+	if len(c.sugg) > 0 { // autocomplete dropdown open
+		switch key {
+		case "down", "ctrl+n":
+			c.suggIdx = (c.suggIdx + 1) % len(c.sugg)
+			return nil
+		case "up", "ctrl+p":
+			c.suggIdx = (c.suggIdx + len(c.sugg) - 1) % len(c.sugg)
+			return nil
+		case "tab", "enter":
+			c.acceptSuggestion()
+			return nil
+		case "esc":
+			c.sugg = nil
+			return nil
+		}
 	}
 	switch key {
 	case "ctrl+enter", "ctrl+s": // ctrl+enter needs a terminal with the kitty keyboard protocol (Ghostty, kitty, WezTerm…)
@@ -352,14 +449,11 @@ func (m *Model) renderComposer(w, h int) string {
 	}
 	title := " " + fg(cInsert).Bold(true).Render("✎ "+c.title) +
 		sDim.Render("  ·  from "+m.accts[c.acct].store.Email)
-	lines := []string{
-		title,
-		" " + fg(cWarn).Render(c.note),
-		label(fTo, "To") + c.to.View(),
-		label(fCc, "Cc") + c.cc.View(),
-		label(fSubject, "Subject") + c.subject.View(),
-		sRule.Render(" " + strings.Repeat("─", iw-2)),
-	}
+	lines := []string{title, " " + fg(cWarn).Render(c.note), label(fTo, "To") + c.to.View()}
+	lines = append(lines, c.suggestionLines(fTo, iw)...)
+	lines = append(lines, label(fCc, "Cc")+c.cc.View())
+	lines = append(lines, c.suggestionLines(fCc, iw)...)
+	lines = append(lines, label(fSubject, "Subject")+c.subject.View(), sRule.Render(" "+strings.Repeat("─", iw-2)))
 	lines = append(lines, strings.Split(c.body.View(), "\n")...)
 	for len(lines) < h-3 {
 		lines = append(lines, "")
@@ -379,6 +473,10 @@ func (m *Model) renderComposer(w, h int) string {
 		footer = sDim.Render(" ctrl+enter send · tab next field · ctrl+e edit in $EDITOR · esc close")
 	}
 	lines = append(lines, footer)
+
+	if len(c.sugg) > 0 && c.busy == "" && !c.confirm && c.err == nil {
+		lines[len(lines)-1] = sDim.Render(" ↓/↑ choose · tab accept · esc dismiss")
+	}
 
 	border := cInsert
 	return paneColor(lines, w, h, border)
