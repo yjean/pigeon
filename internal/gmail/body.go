@@ -6,6 +6,7 @@ import (
 	"mime"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
@@ -42,6 +43,9 @@ func decodePart(p *Part) string {
 	data, err := base64.URLEncoding.DecodeString(p.Body.Data)
 	if err != nil {
 		data, _ = base64.RawURLEncoding.DecodeString(strings.TrimRight(p.Body.Data, "="))
+	}
+	if utf8.Valid(data) { // Gmail usually converts bodies to UTF-8 whatever the declared charset
+		return string(data)
 	}
 	_, params, _ := mime.ParseMediaType(p.Header("Content-Type"))
 	if cs := strings.ToLower(params["charset"]); cs != "" && cs != "utf-8" && cs != "us-ascii" {

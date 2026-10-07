@@ -46,6 +46,12 @@ func TestBodyPrefersPlainAndDecodesCharset(t *testing.T) {
 	if got := m.Body(); got != "Café crème" {
 		t.Fatalf("got %q", got)
 	}
+	// Gmail often hands over UTF-8 even when the part declares another charset.
+	m.Payload.Parts[0].Headers[0].Value = `text/plain; charset="Windows-1252"`
+	m.Payload.Parts[0].Body.Data = enc([]byte("coordonnées · Associé — GBA"))
+	if got := m.Body(); got != "coordonnées · Associé — GBA" {
+		t.Fatalf("already UTF-8 decoded twice: %q", got)
+	}
 }
 
 func TestSummarize(t *testing.T) {
