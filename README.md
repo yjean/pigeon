@@ -34,6 +34,14 @@ make install      # tests, then builds to ~/.local/bin/pigeon (PREFIX=/usr/local
 make uninstall    # removes the binary; config, Keychain tokens and cache are kept
 ```
 
+`pigeon version` prints the version (from `git describe`).
+
+## Releasing
+
+Changes go under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) as they land. To release:
+rename that section to `## [x.y.z] - YYYY-MM-DD`, add an empty `[Unreleased]` above it and fix
+the compare links at the bottom, commit, then `git tag -a vx.y.z -m vx.y.z && git push --follow-tags`.
+
 ## One-time setup: your own Google OAuth client
 
 Gmail scopes are "restricted", so pigeon uses an OAuth client **you** own (free, for personal use):
