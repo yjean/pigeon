@@ -20,7 +20,7 @@ A fast, keyboard-driven Gmail client for the terminal, inspired by [slk](https:/
 - [x] Compose / reply / reply all / forward (in-app editor or `$EDITOR`), save drafts
 - [x] Signatures, one per account (plain text, see Config below)
 - [x] Attachments: attach files (`ctrl+a` browser or drag & drop), forward with attachments; 📎 on list rows
-- [x] Archive / trash / star / mark unread, with undo
+- [x] Archive / trash / star / mark unread, with undo, on one conversation or several (`x`)
 - [ ] Labels sidebar
 - [x] Search (`/`, Gmail search syntax)
 - [x] Links & attachments picker (`o`): open links, save/open attachments, copy links
@@ -82,7 +82,8 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
 | `gi` `gs` `gt` `gd` `ga` | inbox, starred, sent, drafts, all mail |
 | `e` / `#` | archive / move to trash |
 | `s` / `u` | star / mark unread (toggles) |
-| `z` | undo the last archive / trash |
+| `x` | select / unselect the conversation; `e` `#` `s` `u` then act on all selected ones, `esc` clears |
+| `z` | undo the last archive / trash (the whole batch) |
 | `c` | compose a new message |
 | `r` / `a` / `f` | reply / reply all / forward the open conversation |
 | `ctrl+enter` / `ctrl+s` | send (in compose; ctrl+enter needs Ghostty, kitty, WezTerm…) |

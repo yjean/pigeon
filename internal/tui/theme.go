@@ -35,6 +35,7 @@ var (
 	cUnread       = blue
 	cCount        = peach // unread counts
 	cStar         = yellow
+	cMark         = green // conversations selected with x
 	cOK           = green
 	cWarn         = yellow
 	cBusy         = peach

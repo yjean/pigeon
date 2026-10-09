@@ -5,6 +5,12 @@ and versions follow [Semantic Versioning](https://semver.org/) (pre-1.0: minor v
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-09
+
+### Added
+- Batch actions: `x` selects / unselects the conversation, then `e` `#` `s` `u` apply to all
+  selected ones; `z` undoes the whole batch, `esc` clears the selection.
+
 ## [0.2.0] - 2026-10-07
 
 ### Added
@@ -37,6 +43,7 @@ First usable version.
 - Catppuccin Mocha theme.
 - `make install`.
 
-[Unreleased]: https://github.com/yjean/pigeon/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/yjean/pigeon/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/yjean/pigeon/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/yjean/pigeon/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/yjean/pigeon/releases/tag/v0.1.0

@@ -57,6 +57,7 @@ type account struct {
 	loaded   bool
 	syncing  map[string]bool      // by label
 	hidden   map[string]time.Time // optimistically removed thread IDs
+	marked   map[string]bool      // thread IDs marked with x for a batch action
 
 	inboxUnread int // true unread inbox count from Gmail (-1 = unknown)
 
@@ -141,7 +142,7 @@ type Model struct {
 	flashErr bool
 
 	confirmQuit bool // q pressed: q or y quits, any other key cancels
-	flashSeq int
+	flashSeq    int
 
 	w, h     int
 	pendingG bool
@@ -181,7 +182,7 @@ func Run(accounts []config.Account) error {
 		if err != nil {
 			return err
 		}
-		ac := &account{store: st, badge: badges[i], box: inbox, syncing: map[string]bool{}, hidden: map[string]time.Time{},
+		ac := &account{store: st, badge: badges[i], box: inbox, syncing: map[string]bool{}, hidden: map[string]time.Time{}, marked: map[string]bool{},
 			unreadOnly: map[string]bool{"INBOX": true}, keep: map[string]bool{}, inboxUnread: -1}
 		ac.threads = st.CachedList(ac.view()) // instant first paint from disk
 		ac.loaded = ac.threads != nil
@@ -487,6 +488,8 @@ func (m *Model) onKey(key string) tea.Cmd {
 		return m.act("unread")
 	case "z":
 		return m.undo()
+	case "x":
+		return m.toggleMark()
 	case "g":
 		m.pendingG = true
 		return nil
@@ -524,6 +527,10 @@ func (m *Model) onKey(key string) tea.Cmd {
 
 	switch key {
 	case "esc":
+		if len(a.marked) > 0 {
+			clear(a.marked)
+			return nil
+		}
 		if a.box.search {
 			return m.exitSearch()
 		}
@@ -599,6 +606,7 @@ func (m *Model) reloadView() tea.Cmd {
 	a := m.acct()
 	a.sel, a.top, m.focus = 0, 0, focusList
 	clear(a.keep)
+	clear(a.marked)
 	a.threads = a.store.CachedList(a.view())
 	a.loaded = a.threads != nil
 	return tea.Batch(m.selectionChanged(), m.sync(m.cur))

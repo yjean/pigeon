@@ -149,3 +149,51 @@ func TestWithSignature(t *testing.T) {
 		t.Fatalf("no signature: %q", got)
 	}
 }
+
+func TestBatchArchiveAndUndo(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	st, err := store.Open("batch@x.io")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &account{store: st, box: inbox, hidden: map[string]time.Time{}, marked: map[string]bool{},
+		unreadOnly: map[string]bool{}, keep: map[string]bool{},
+		threads: []gmail.Summary{{ID: "a"}, {ID: "b"}, {ID: "c"}, {ID: "d"}}}
+	m := &Model{accts: []*account{a}}
+	ids := func() string {
+		var out []string
+		for _, s := range a.threads {
+			out = append(out, s.ID)
+		}
+		return strings.Join(out, "")
+	}
+
+	m.toggleMark() // a
+	m.moveTo(1)
+	m.toggleMark() // b
+	m.toggleMark() // b again: unmarked
+	m.moveTo(2)
+	m.toggleMark() // c
+	if a.markedCount() != 2 || a.sel != 2 {
+		t.Fatalf("marked %d, sel %d", a.markedCount(), a.sel)
+	}
+	m.act("archive")
+	if ids() != "bd" || a.markedCount() != 0 || len(m.lastUndo.items) != 2 {
+		t.Fatalf("after archive: %q, %d marked", ids(), a.markedCount())
+	}
+	m.undo()
+	if ids() != "abcd" {
+		t.Fatalf("after undo: %q", ids())
+	}
+
+	m.act("star") // nothing marked: the selected thread only
+	starred := 0
+	for _, s := range a.threads {
+		if s.Starred {
+			starred++
+		}
+	}
+	if starred != 1 || !a.threads[a.sel].Starred {
+		t.Fatalf("star should apply to the selection only: %+v", a.threads)
+	}
+}

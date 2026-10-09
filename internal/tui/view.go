@@ -90,6 +90,9 @@ func (m *Model) renderList(w, h int) string {
 	if n > 0 {
 		head += fg(cCount).Render(fmt.Sprintf("  ·  %d unread", n))
 	}
+	if n := a.markedCount(); n > 0 {
+		head += fg(cMark).Render(fmt.Sprintf("  ·  ✓ %d selected", n)) + sFaint.Render("  esc to clear")
+	}
 	lines = append(lines, " "+head)
 
 	rows := ih - 1
@@ -112,13 +115,13 @@ func (m *Model) renderList(w, h int) string {
 		}
 		a.top = clamp(a.top, 0, max(len(a.threads)-rows, 0))
 		for i := a.top; i < len(a.threads) && i < a.top+rows; i++ {
-			lines = append(lines, renderRow(a.threads[i], iw, i == a.sel, m.focus == focusList))
+			lines = append(lines, renderRow(a.threads[i], iw, i == a.sel, m.focus == focusList, a.marked[a.threads[i].ID]))
 		}
 	}
 	return pane(lines, w, h, m.focus == focusList)
 }
 
-func renderRow(s gmail.Summary, w int, selected, focused bool) string {
+func renderRow(s gmail.Summary, w int, selected, focused, marked bool) string {
 	st := func(base lipgloss.Style) lipgloss.Style {
 		if selected {
 			return base.Background(cSelBg)
@@ -137,6 +140,9 @@ func renderRow(s gmail.Summary, w int, selected, focused bool) string {
 			c = overlay0
 		}
 		lead = st(lipgloss.NewStyle().Foreground(c)).Render("▌")
+	}
+	if marked {
+		lead = st(fg(cMark).Bold(true)).Render("✓")
 	}
 	dot := st(sBase).Render(" ")
 	if s.Unread {
@@ -383,6 +389,7 @@ func helpLines() []string {
 		{"gi gs gt gd ga", "inbox, starred, sent, drafts, all mail"},
 		{"e / #", "archive / move to trash"},
 		{"s / u", "star / mark unread (toggles)"},
+		{"x", "select / unselect a conversation, then e # s u act on all of them; esc clears"},
 		{"z", "undo archive / trash"},
 		{"c", "compose a new message"},
 		{"r / a / f", "reply / reply all / forward"},
