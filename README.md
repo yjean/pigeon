@@ -115,7 +115,8 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
   Refreshed access tokens are written back automatically (`auth.Client`).
 - **Config**: `~/.config/pigeon/` (`$XDG_CONFIG_HOME` respected)
   - `credentials.json`: OAuth client (0600)
-  - `accounts.json`: ordered account list (= rail order)
+  - `accounts.json`: ordered account list (= rail order). Add `"badge": "YF"` to an account
+    to pick its 2-letter rail badge instead of the computed one.
   - `signatures/<email>.txt`: the account's signature, inserted verbatim under what you
     write (above the quote in replies and forwards). Start it with `-- ` (dash dash space)
     so mail clients recognize it. No file, no signature.

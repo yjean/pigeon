@@ -63,6 +63,7 @@ func Signature(email string) string {
 type Account struct {
 	Email   string    `json:"email"`
 	AddedAt time.Time `json:"added_at"`
+	Badge   string    `json:"badge,omitempty"` // optional rail badge, overrides the computed one
 }
 
 // Initials gives the 2-letter badge shown in the account rail (like slk's workspace rail).
@@ -79,19 +80,33 @@ func (a Account) Initials() string {
 	}
 }
 
+// customBadge is the account's configured badge, uppercased and cut to 2 runes ("" if unset).
+func (a Account) customBadge() string {
+	r := []rune(strings.ToUpper(strings.TrimSpace(a.Badge)))
+	return string(r[:min(len(r), 2)])
+}
+
 // Badges returns one unique 2-letter badge per account, in order.
-// Clashing initials fall back to first letter of the local part + of the domain
-// (yoann.jean@gmail.com → YG, yoann.jean@ispd.com → YI), then to a numeric suffix.
+// A configured badge is kept as is and reserved first. Computed initials that clash
+// (with each other or with a configured badge) fall back to first letter of the local part
+// + of the domain (yoann.jean@gmail.com → YG, yoann.jean@ispd.com → YI), then to a numeric suffix.
 func Badges(accounts []Account) []string {
-	count := map[string]int{}
-	for _, a := range accounts {
-		count[a.Initials()]++
-	}
 	out := make([]string, len(accounts))
 	used := map[string]bool{}
+	count := map[string]int{}
 	for i, a := range accounts {
+		if b := a.customBadge(); b != "" {
+			out[i], used[b] = b, true
+		} else {
+			count[a.Initials()]++
+		}
+	}
+	for i, a := range accounts {
+		if out[i] != "" {
+			continue
+		}
 		b := a.Initials()
-		if count[b] > 1 {
+		if count[b] > 1 || used[b] {
 			local, domain, _ := strings.Cut(a.Email, "@")
 			if local != "" && domain != "" {
 				b = strings.ToUpper(local[:1] + domain[:1])

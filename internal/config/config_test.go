@@ -48,6 +48,16 @@ func TestBadgesUnique(t *testing.T) {
 	}
 }
 
+func TestBadgesCustom(t *testing.T) {
+	got := Badges([]Account{{Email: "yoann.jean@gmail.com", Badge: "yf"}, {Email: "yoann@42.works", Badge: " yj "}, {Email: "yoann.jean@ispd.com"}, {Email: "zoe@x.io", Badge: "zzz"}})
+	want := []string{"YF", "YJ", "YI", "ZZ"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v want %v", got, want)
+		}
+	}
+}
+
 func TestSignature(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	if s := Signature("me@x.io"); s != "" {

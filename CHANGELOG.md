@@ -5,6 +5,9 @@ and versions follow [Semantic Versioning](https://semver.org/) (pre-1.0: minor v
 
 ## [Unreleased]
 
+### Added
+- Custom rail badge per account: optional `"badge"` key in `accounts.json`.
+
 ## [0.3.0] - 2026-10-09
 
 ### Added
