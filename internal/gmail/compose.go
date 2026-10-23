@@ -261,9 +261,8 @@ func formatList(list []Address) string {
 	return strings.Join(parts, ", ")
 }
 
-// Reply prepares a reply (or reply-all) to the last message of the thread.
-func Reply(t *Thread, me Address, all bool) Outgoing {
-	last := t.Messages[len(t.Messages)-1]
+// Reply prepares a reply (or reply-all) to message last of thread t.
+func Reply(t *Thread, last Message, me Address, all bool) Outgoing {
 	from := ParseAddress(last.Header("From"))
 	isMe := func(a Address) bool { return strings.EqualFold(a.Email, me.Email) }
 
@@ -307,9 +306,8 @@ func Reply(t *Thread, me Address, all bool) Outgoing {
 	}
 }
 
-// Forward prepares a forward of the last message of the thread (text only).
-func Forward(t *Thread, me Address) Outgoing {
-	last := t.Messages[len(t.Messages)-1]
+// Forward prepares a forward of message last of thread t (text only).
+func Forward(t *Thread, last Message, me Address) Outgoing {
 	var b strings.Builder
 	b.WriteString("\n\n---------- Forwarded message ---------\n")
 	fmt.Fprintf(&b, "From: %s\n", last.Header("From"))

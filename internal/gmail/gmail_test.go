@@ -83,7 +83,7 @@ func TestRawAndReply(t *testing.T) {
 	th.Messages[0].Payload.MimeType = "text/plain"
 	th.Messages[0].Payload.Body.Data = base64.URLEncoding.EncodeToString([]byte("Hi Yoann"))
 
-	r := Reply(th, me, true)
+	r := Reply(th, th.Messages[0], me, true)
 	if r.To != "Julian Doe <j@x.io>" || r.Cc != "Damon <d@x.io>, s@x.io" {
 		t.Fatalf("recipients: to=%q cc=%q", r.To, r.Cc)
 	}
@@ -93,7 +93,7 @@ func TestRawAndReply(t *testing.T) {
 	if !strings.Contains(r.Body, "> Hi Yoann") {
 		t.Fatalf("quote missing: %q", r.Body)
 	}
-	if one := Reply(th, me, false); one.Cc != "" {
+	if one := Reply(th, th.Messages[0], me, false); one.Cc != "" {
 		t.Fatalf("reply (not all) should have no cc: %q", one.Cc)
 	}
 
@@ -112,7 +112,7 @@ func TestRawAndReply(t *testing.T) {
 	if _, err := (Outgoing{From: me, To: "not an address"}).Raw(); err == nil {
 		t.Error("expected invalid recipient error")
 	}
-	if f := Forward(th, me); f.Subject != "Fwd: Budget" || f.To != "" || !strings.Contains(f.Body, "Forwarded message") {
+	if f := Forward(th, th.Messages[0], me); f.Subject != "Fwd: Budget" || f.To != "" || !strings.Contains(f.Body, "Forwarded message") {
 		t.Errorf("forward: %+v", f)
 	}
 }

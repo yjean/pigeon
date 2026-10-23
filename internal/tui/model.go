@@ -131,6 +131,12 @@ type Model struct {
 	openErr     error
 	threadCache map[string]*gmail.Thread // "email|threadID"
 
+	msgThread string          // thread the message state below belongs to
+	msgSel    string          // focused message ID
+	expanded  map[string]bool // message IDs shown in full
+	known     map[string]bool // message IDs already given their default
+	msgSpans  []span          // reader lines of each message, by index
+
 	composer *composer
 	lastUndo *undoable
 
@@ -439,7 +445,7 @@ func (m *Model) onKey(key string) tea.Cmd {
 		m.pendingG = false
 		if key == "g" {
 			if m.focus == focusReader {
-				m.reader.GotoTop()
+				m.focusEnd(false)
 				return nil
 			}
 			return m.moveTo(0)
@@ -499,12 +505,15 @@ func (m *Model) onKey(key string) tea.Cmd {
 		return m.moveTo(a.sel - 1)
 	case "ctrl+d":
 		m.reader.HalfPageDown()
+		m.followScroll()
 		return nil
 	case "ctrl+u":
 		m.reader.HalfPageUp()
+		m.followScroll()
 		return nil
 	case "space":
 		m.reader.PageDown()
+		m.followScroll()
 		return nil
 	}
 	if n, err := strconv.Atoi(key); err == nil && n >= 1 && n <= len(m.accts) {
@@ -514,11 +523,15 @@ func (m *Model) onKey(key string) tea.Cmd {
 	if m.focus == focusReader {
 		switch key {
 		case "j", "down":
-			m.reader.ScrollDown(1)
+			m.moveMsg(1)
 		case "k", "up":
-			m.reader.ScrollUp(1)
+			m.moveMsg(-1)
+		case "enter", "l", "right":
+			m.toggleMsg()
+		case "E":
+			m.toggleAllMsgs()
 		case "G":
-			m.reader.GotoBottom()
+			m.focusEnd(true)
 		case "esc", "h", "q", "left":
 			m.focus = focusList
 		}

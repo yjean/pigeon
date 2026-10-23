@@ -16,6 +16,7 @@ A fast, keyboard-driven Gmail client for the terminal, inspired by [slk](https:/
 - [x] CLI skeleton
 - [x] Add / list / remove Gmail accounts (OAuth 2.0 + PKCE, tokens in macOS Keychain)
 - [x] TUI: account rail, thread list, reading pane, status bar
+- [x] Conversations as an accordion: newest and unread messages open, others on one line; focus a message to reply to it
 - [x] Disk cache: instant startup, incremental sync (by thread historyId), prefetch
 - [x] Compose / reply / reply all / forward (in-app editor or `$EDITOR`), save drafts
 - [x] Signatures, one per account (plain text, see Config below)
@@ -72,12 +73,14 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
 
 | Keys | Action |
 |---|---|
-| `j` / `k`, `↓` / `↑` | next / previous conversation (scroll when reading) |
+| `j` / `k`, `↓` / `↑` | next / previous conversation (message when reading) |
 | `J` / `K` | next / previous conversation, from anywhere |
 | `enter` `l` `tab` | read the conversation (marks it read) |
+| `enter` `l` | expand / collapse the focused message (when reading) |
+| `E` | expand all messages / collapse all but the focused one (when reading) |
 | `esc` `h` `q` | back to the list |
-| `gg` / `G` | top / bottom |
-| `space`, `ctrl+d` / `ctrl+u` | scroll the conversation |
+| `gg` / `G` | top / bottom (newest / oldest message when reading) |
+| `space`, `ctrl+d` / `ctrl+u` | scroll the conversation (the focus follows) |
 | `1`–`9`, `[` / `]` | switch account |
 | `gi` `gs` `gt` `gd` `ga` | inbox, starred, sent, drafts, all mail |
 | `e` / `#` | archive / move to trash |
@@ -85,7 +88,7 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
 | `x` | select / unselect the conversation; `e` `#` `s` `u` then act on all selected ones, `esc` clears |
 | `z` | undo the last archive / trash (the whole batch) |
 | `c` | compose a new message |
-| `r` / `a` / `f` | reply / reply all / forward the open conversation |
+| `r` / `a` / `f` | reply / reply all / forward the focused message (the latest one unless you moved) |
 | `ctrl+enter` / `ctrl+s` | send (in compose; ctrl+enter needs Ghostty, kitty, WezTerm…) |
 | `ctrl+e` | edit the body in `$EDITOR` (in compose) |
 | `tab` / `shift+tab` | next / previous field (in compose) |

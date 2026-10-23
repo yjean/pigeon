@@ -3,10 +3,12 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/yoann/pigeon/internal/gmail"
@@ -195,5 +197,54 @@ func TestBatchArchiveAndUndo(t *testing.T) {
 	}
 	if starred != 1 || !a.threads[a.sel].Starred {
 		t.Fatalf("star should apply to the selection only: %+v", a.threads)
+	}
+}
+
+func TestThreadMessageFocus(t *testing.T) {
+	msg := func(id, from string, unread bool) gmail.Message {
+		m := gmail.Message{ID: id, Snippet: "hi " + id, Payload: gmail.Part{MimeType: "text/plain", Headers: []gmail.Header{{Name: "From", Value: from}}}}
+		if unread {
+			m.LabelIDs = []string{"UNREAD"}
+		}
+		return m
+	}
+	th := &gmail.Thread{ID: "T", Messages: []gmail.Message{
+		msg("m1", "Alice <a@x.io>", false), msg("m2", "Bob <b@x.io>", true), msg("m3", "me@x.io", false)}}
+	m := &Model{openThread: th, reader: viewport.New()}
+	m.resetMessages()
+	if m.msgSel != "m3" || !m.expanded["m3"] || !m.expanded["m2"] || m.expanded["m1"] {
+		t.Fatalf("defaults: sel=%s expanded=%v", m.msgSel, m.expanded)
+	}
+
+	m.moveMsg(1) // down the reader: older
+	if m.msgSel != "m2" || m.focusedMessage().ID != "m2" {
+		t.Fatalf("j: sel=%s", m.msgSel)
+	}
+	m.expanded["m2"] = false
+	m.moveMsg(5)
+	if m.msgSel != "m1" {
+		t.Fatalf("j past the end: sel=%s", m.msgSel)
+	}
+
+	// A reload of the same thread with a new message keeps the user's state.
+	th2 := &gmail.Thread{ID: "T", Messages: append(slices.Clone(th.Messages), msg("m4", "Alice <a@x.io>", true))}
+	m.openThread = th2
+	m.resetMessages()
+	if m.msgSel != "m1" || m.expanded["m2"] || !m.expanded["m4"] {
+		t.Fatalf("reload: sel=%s expanded=%v", m.msgSel, m.expanded)
+	}
+
+	content, spans := renderThread(th2, 60, "me@x.io", m.isOpen)
+	lines := strings.Split(content, "\n")
+	if len(spans) != 4 || spans[3].from != 0 || spans[0].to != len(lines) {
+		t.Fatalf("spans %v over %d lines", spans, len(lines))
+	}
+	for i, s := range spans {
+		if !m.isOpen(i) && s.to-s.from != 1 {
+			t.Errorf("collapsed message %d takes %d lines", i, s.to-s.from)
+		}
+	}
+	if !strings.Contains(lines[spans[0].from], "hi m1") || !strings.Contains(lines[spans[2].from], "(me)") {
+		t.Errorf("rows: %q / %q", lines[spans[0].from], lines[spans[2].from])
 	}
 }
