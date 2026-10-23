@@ -36,6 +36,7 @@ var (
 	cCount        = peach // unread counts
 	cStar         = yellow
 	cMark         = green // conversations selected with x
+	cMe           = mauve // my own messages in a conversation
 	cOK           = green
 	cWarn         = yellow
 	cBusy         = peach
@@ -52,6 +53,7 @@ var (
 	sDate   = lipgloss.NewStyle().Foreground(overlay1).Italic(true)
 	sTitle  = lipgloss.NewStyle().Foreground(mauve).Bold(true)
 	sName   = lipgloss.NewStyle().Foreground(blue).Bold(true)
+	sMe     = lipgloss.NewStyle().Foreground(cMe).Bold(true)
 	sKey    = lipgloss.NewStyle().Foreground(blue)
 	sNormal = lipgloss.NewStyle().Foreground(crust).Background(blue).Bold(true)
 	sRead   = lipgloss.NewStyle().Foreground(crust).Background(mauve).Bold(true)

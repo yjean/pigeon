@@ -272,18 +272,23 @@ func (m *Model) startCompose(kind string) tea.Cmd {
 	if m.openThread == nil || m.openID != s.ID || len(m.openThread.Messages) == 0 {
 		return m.flashMsg("Conversation still loading…", true)
 	}
-	t := m.openThread
+	t, msg := m.openThread, m.focusedMessage()
+	// Say which message when it is not the latest one.
+	of := ""
+	if msg.ID != t.Messages[len(t.Messages)-1].ID {
+		of = " · " + gmail.ParseAddress(msg.Header("From")).Short() + ", " + msg.Time().Local().Format("Mon Jan 2, 3:04 PM")
+	}
 	var c *composer
 	var cmd tea.Cmd
 	sign := func(o gmail.Outgoing) gmail.Outgoing { o.Body = withSignature(o.Body, sig); return o }
 	switch kind {
 	case "r":
-		c, cmd = newComposer("Reply", m.cur, sign(gmail.Reply(t, me, false)), fBody)
+		c, cmd = newComposer("Reply"+of, m.cur, sign(gmail.Reply(t, msg, me, false)), fBody)
 	case "a":
-		c, cmd = newComposer("Reply all", m.cur, sign(gmail.Reply(t, me, true)), fBody)
+		c, cmd = newComposer("Reply all"+of, m.cur, sign(gmail.Reply(t, msg, me, true)), fBody)
 	case "f":
-		c, cmd = newComposer("Forward", m.cur, sign(gmail.Forward(t, me)), fTo)
-		for _, att := range t.Messages[len(t.Messages)-1].AttachmentParts() {
+		c, cmd = newComposer("Forward"+of, m.cur, sign(gmail.Forward(t, msg, me)), fTo)
+		for _, att := range msg.AttachmentParts() {
 			if !att.Inline {
 				c.atts = append(c.atts, composeAtt{name: att.Filename, size: att.Size, remote: &att})
 			}

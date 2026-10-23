@@ -5,6 +5,12 @@ and versions follow [Semantic Versioning](https://semver.org/) (pre-1.0: minor v
 
 ## [Unreleased]
 
+### Changed
+- Conversations read as an accordion: the newest and unread messages open, the others folded to
+  one line (sender, date, snippet). In the reader `j`/`k` move between messages, `enter` expands /
+  collapses one, `E` all of them; a bar marks the focused message and your own show in mauve.
+- `r` `a` `f` reply to / forward the focused message, not always the latest one.
+
 ## [0.4.0] - 2026-10-19
 
 ### Added

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"html"
 	"image/color"
 	"strings"
 	"time"
@@ -203,26 +204,42 @@ func (m *Model) readerSize() (w, h int) {
 }
 
 // refreshReader re-renders the open thread into the viewport. reset scrolls to
-// the top (the latest message), otherwise keeps the position.
+// the focused message (the latest one on a newly opened thread), otherwise
+// keeps the position.
 func (m *Model) refreshReader(reset bool) {
 	if m.w == 0 {
 		return
 	}
 	w, h := m.readerSize()
+	w -= m.gutter()
 	m.reader.SetWidth(w)
 	m.reader.SetHeight(max(h, 1))
 	if m.openThread == nil {
 		m.reader.SetContent("")
+		m.msgSpans = nil
 		return
 	}
-	content := renderThread(m.openThread, w-1, m.acct().store.Email)
+	if reset {
+		m.resetMessages()
+	}
+	content, spans := renderThread(m.openThread, w-1, m.acct().store.Email, m.isOpen)
 	off := m.reader.YOffset()
 	m.reader.SetContent(content)
+	m.msgSpans = spans
 	if reset {
 		m.reader.GotoTop()
+		m.scrollToMsg()
 	} else {
 		m.reader.SetYOffset(off)
 	}
+}
+
+// gutter is the width of the focus bar left of the messages, none for a lone one.
+func (m *Model) gutter() int {
+	if m.openThread == nil || len(m.openThread.Messages) < 2 {
+		return 0
+	}
+	return 2
 }
 
 func (m *Model) renderReader(w, h int) string {
@@ -257,11 +274,27 @@ func (m *Model) renderReader(w, h int) string {
 		lines = append(lines, sDim.Render(" Loading…"))
 	default:
 		body := strings.Split(m.reader.View(), "\n")
-		bar := scrollbar(m.reader.YOffset(), m.reader.Height(), m.reader.TotalLineCount())
+		off := m.reader.YOffset()
+		bar := scrollbar(off, m.reader.Height(), m.reader.TotalLineCount())
+		var sel span
+		if i := m.msgIndex(); i >= 0 && i < len(m.msgSpans) {
+			sel = m.msgSpans[i]
+		}
+		focusBar := fg(cBorder).Render("┃")
+		if m.focus == focusReader {
+			focusBar = fg(cSelBar).Render("┃")
+		}
 		for i := 0; i < m.reader.Height(); i++ {
 			l := ""
 			if i < len(body) {
 				l = body[i]
+			}
+			if g := m.gutter(); g > 0 {
+				if n := off + i; n >= sel.from && n < sel.to {
+					l = focusBar + strings.Repeat(" ", g-1) + l
+				} else {
+					l = strings.Repeat(" ", g) + l
+				}
 			}
 			lines = append(lines, fit(" "+l, iw-1)+bar[i])
 		}
@@ -269,56 +302,88 @@ func (m *Model) renderReader(w, h int) string {
 	return pane(lines, w, h, m.focus == focusReader)
 }
 
-// renderThread formats every message of the thread, newest first.
-func renderThread(t *gmail.Thread, w int, me string) string {
+// renderThread formats the thread newest message first: open messages in
+// full, the others on one line. It returns the content and each message's lines.
+func renderThread(t *gmail.Thread, w int, me string, open func(int) bool) (string, []span) {
 	w = max(w, 10)
+	spans := make([]span, len(t.Messages))
 	var lines []string
 	for i := len(t.Messages) - 1; i >= 0; i-- {
 		msg := t.Messages[i]
-		if i < len(t.Messages)-1 {
-			lines = append(lines, "", sRule.Render(strings.Repeat("┄", w)), "")
+		if i < len(t.Messages)-1 && (open(i) || open(i+1)) {
+			lines = append(lines, sRule.Render(strings.Repeat("┄", w)))
 		}
-		from := gmail.ParseAddress(msg.Header("From"))
-		name := from.Short()
-		if strings.EqualFold(from.Email, me) {
-			name += " (me)"
+		spans[i].from = len(lines)
+		if open(i) {
+			lines = append(lines, renderMessage(msg, w, me, len(t.Messages) > 1)...)
+		} else {
+			lines = append(lines, renderCollapsed(msg, w, me))
 		}
-		head := sName.Render(name)
-		if from.Name != "" {
-			head += "  " + sDim.Render(from.Email)
-		}
-		head += "  " + sDate.Render(msg.Time().Local().Format("Mon Jan 2, 3:04 PM"))
-		if msg.HasLabel("UNREAD") {
-			head += fg(cUnread).Render("  ●")
-		}
-		lines = append(lines, ansi.Truncate(head, w, "…"))
-
-		var to []string
-		for _, addr := range append(gmail.ParseAddressList(msg.Header("To")), gmail.ParseAddressList(msg.Header("Cc"))...) {
-			if strings.EqualFold(addr.Email, me) {
-				to = append(to, "me")
-			} else {
-				to = append(to, addr.Short())
-			}
-		}
-		if len(to) > 0 {
-			lines = append(lines, sDim.Render(ansi.Truncate("to "+strings.Join(to, ", "), w, "…")))
-		}
-		if att := msg.Attachments(); len(att) > 0 {
-			lines = append(lines, sMuted.Render(ansi.Truncate("📎 "+strings.Join(att, ", "), w-14, "…"))+sFaint.Render("  o to open"))
-		}
-		lines = append(lines, "")
-
-		body := msg.Body()
-		if stripped := gmail.StripQuoted(body); stripped != "" {
-			body = stripped
-		}
-		if body == "" {
-			body = sDim.Render("(no text content)")
-		}
-		lines = append(lines, strings.Split(ansi.Wrap(body, w, ""), "\n")...)
+		spans[i].to = len(lines)
 	}
-	return strings.Join(lines, "\n")
+	return strings.Join(lines, "\n"), spans
+}
+
+// sender is how a message's From shows in the reader, "(me)" in its own color.
+func sender(msg gmail.Message, me string) (gmail.Address, string) {
+	from := gmail.ParseAddress(msg.Header("From"))
+	if strings.EqualFold(from.Email, me) {
+		return from, sMe.Render(from.Short() + " (me)")
+	}
+	return from, sName.Render(from.Short())
+}
+
+// renderCollapsed is a message folded to one line: sender, date, snippet.
+func renderCollapsed(msg gmail.Message, w int, me string) string {
+	_, name := sender(msg, me)
+	head := sFaint.Render("▸ ") + padRight(ansi.Truncate(name, 22, "…"), 22) + " " + sDate.Render(padRight(listDate(msg.Time()), 10)) + " "
+	if msg.HasLabel("UNREAD") {
+		head += fg(cUnread).Render("● ")
+	}
+	head += sDim.Render(oneLine(html.UnescapeString(msg.Snippet)))
+	return ansi.Truncate(head, w, "…")
+}
+
+// renderMessage is a message in full; arrow marks it collapsible.
+func renderMessage(msg gmail.Message, w int, me string, arrow bool) []string {
+	from, name := sender(msg, me)
+	head := name
+	if arrow {
+		head = sFaint.Render("▾ ") + head
+	}
+	if from.Name != "" {
+		head += "  " + sDim.Render(from.Email)
+	}
+	head += "  " + sDate.Render(msg.Time().Local().Format("Mon Jan 2, 3:04 PM"))
+	if msg.HasLabel("UNREAD") {
+		head += fg(cUnread).Render("  ●")
+	}
+	lines := []string{ansi.Truncate(head, w, "…")}
+
+	var to []string
+	for _, addr := range append(gmail.ParseAddressList(msg.Header("To")), gmail.ParseAddressList(msg.Header("Cc"))...) {
+		if strings.EqualFold(addr.Email, me) {
+			to = append(to, "me")
+		} else {
+			to = append(to, addr.Short())
+		}
+	}
+	if len(to) > 0 {
+		lines = append(lines, sDim.Render(ansi.Truncate("to "+strings.Join(to, ", "), w, "…")))
+	}
+	if att := msg.Attachments(); len(att) > 0 {
+		lines = append(lines, sMuted.Render(ansi.Truncate("📎 "+strings.Join(att, ", "), w-14, "…"))+sFaint.Render("  o to open"))
+	}
+	lines = append(lines, "")
+
+	body := msg.Body()
+	if stripped := gmail.StripQuoted(body); stripped != "" {
+		body = stripped
+	}
+	if body == "" {
+		body = sDim.Render("(no text content)")
+	}
+	return append(lines, strings.Split(ansi.Wrap(body, w, ""), "\n")...)
 }
 
 // --- status bar ---
@@ -379,11 +444,13 @@ func (m *Model) renderStatus() string {
 
 func helpLines() []string {
 	rows := [][2]string{
-		{"j / k  ↓ / ↑", "next / previous conversation (scroll when reading)"},
+		{"j / k  ↓ / ↑", "next / previous conversation (message when reading)"},
 		{"J / K", "next / previous conversation, from anywhere"},
 		{"enter  l  tab", "read conversation (marks it read)"},
+		{"  enter  l", "  expand / collapse the message (when reading)"},
+		{"  E", "  expand all / collapse all but the focused message"},
 		{"esc  h  q", "back to the list"},
-		{"gg / G", "top / bottom"},
+		{"gg / G", "top / bottom (newest / oldest message when reading)"},
 		{"space  ctrl+d / ctrl+u", "scroll the conversation"},
 		{"1-9  [ / ]", "switch account"},
 		{"gi gs gt gd ga", "inbox, starred, sent, drafts, all mail"},
@@ -392,7 +459,7 @@ func helpLines() []string {
 		{"x", "select / unselect a conversation, then e # s u act on all of them; esc clears"},
 		{"z", "undo archive / trash"},
 		{"c", "compose a new message"},
-		{"r / a / f", "reply / reply all / forward"},
+		{"r / a / f", "reply / reply all / forward (the focused message)"},
 		{"  ctrl+enter", "  send (in compose; ctrl+s also works)"},
 		{"  ctrl+e", "  edit the body in $EDITOR"},
 		{"  tab / esc", "  next field / close (save draft or discard)"},
