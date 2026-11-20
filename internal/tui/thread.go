@@ -70,8 +70,20 @@ func (m *Model) moveMsg(d int) {
 	if i < 0 {
 		return
 	}
-	i = clamp(i-d, 0, len(m.openThread.Messages)-1) // newest is shown first
-	m.msgSel = m.openThread.Messages[i].ID
+	// A focused message taller than the reader scrolls line by line before
+	// the focus moves on, so a long (or lone) message can be read with j/k.
+	if i < len(m.msgSpans) {
+		s, off, h := m.msgSpans[i], m.reader.YOffset(), m.reader.Height()
+		if d > 0 && s.to > off+h || d < 0 && s.from < off {
+			m.reader.SetYOffset(off + d)
+			return
+		}
+	}
+	j := clamp(i-d, 0, len(m.openThread.Messages)-1) // newest is shown first
+	if j == i {                                      // already at the end of the thread: stay put
+		return
+	}
+	m.msgSel = m.openThread.Messages[j].ID
 	m.scrollToMsg()
 }
 

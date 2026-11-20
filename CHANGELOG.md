@@ -11,6 +11,10 @@ and versions follow [Semantic Versioning](https://semver.org/) (pre-1.0: minor v
   collapses one, `E` all of them; a bar marks the focused message and your own show in mauve.
 - `r` `a` `f` reply to / forward the focused message, not always the latest one.
 
+### Fixed
+- A message taller than the reader can be scrolled again: `j`/`k` scroll through it before moving
+  to the next message, and `pgdn`/`pgup` page the conversation.
+
 ## [0.4.0] - 2026-10-19
 
 ### Added

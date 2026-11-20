@@ -511,8 +511,12 @@ func (m *Model) onKey(key string) tea.Cmd {
 		m.reader.HalfPageUp()
 		m.followScroll()
 		return nil
-	case "space":
+	case "space", "pgdown":
 		m.reader.PageDown()
+		m.followScroll()
+		return nil
+	case "pgup":
+		m.reader.PageUp()
 		m.followScroll()
 		return nil
 	}
