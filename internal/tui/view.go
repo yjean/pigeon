@@ -451,7 +451,7 @@ func helpLines() []string {
 		{"  E", "  expand all / collapse all but the focused message"},
 		{"esc  h  q", "back to the list"},
 		{"gg / G", "top / bottom (newest / oldest message when reading)"},
-		{"space  ctrl+d / ctrl+u", "scroll the conversation"},
+		{"space  pgdn / pgup  ctrl+d / ctrl+u", "scroll the conversation"},
 		{"1-9  [ / ]", "switch account"},
 		{"gi gs gt gd ga", "inbox, starred, sent, drafts, all mail"},
 		{"e / #", "archive / move to trash"},

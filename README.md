@@ -80,7 +80,7 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
 | `E` | expand all messages / collapse all but the focused one (when reading) |
 | `esc` `h` `q` | back to the list |
 | `gg` / `G` | top / bottom (newest / oldest message when reading) |
-| `space`, `ctrl+d` / `ctrl+u` | scroll the conversation (the focus follows) |
+| `space`, `pgdn` / `pgup`, `ctrl+d` / `ctrl+u` | scroll the conversation (the focus follows) |
 | `1`–`9`, `[` / `]` | switch account |
 | `gi` `gs` `gt` `gd` `ga` | inbox, starred, sent, drafts, all mail |
 | `e` / `#` | archive / move to trash |

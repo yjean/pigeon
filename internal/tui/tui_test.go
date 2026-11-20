@@ -248,3 +248,30 @@ func TestThreadMessageFocus(t *testing.T) {
 		t.Errorf("rows: %q / %q", lines[spans[0].from], lines[spans[2].from])
 	}
 }
+
+func TestLongMessageScrolls(t *testing.T) {
+	m := &Model{accts: []*account{{box: inbox}}, reader: viewport.New(), openThread: &gmail.Thread{ID: "T", Messages: []gmail.Message{{ID: "m1"}}}}
+	m.resetMessages()
+	m.reader.SetHeight(5)
+	m.reader.SetContent(strings.Repeat("line\n", 29) + "end")
+	m.msgSpans = []span{{0, 30}}
+
+	m.moveMsg(1) // j
+	m.moveMsg(1)
+	if off := m.reader.YOffset(); off != 2 {
+		t.Fatalf("j on a long lone message: offset %d", off)
+	}
+	m.moveMsg(-1) // k
+	if off := m.reader.YOffset(); off != 1 {
+		t.Fatalf("k: offset %d", off)
+	}
+	m.onKey("pgdown")
+	if off := m.reader.YOffset(); off != 6 {
+		t.Fatalf("pgdown: offset %d", off)
+	}
+	m.onKey("pgup")
+	if off := m.reader.YOffset(); off != 1 {
+		t.Fatalf("pgup: offset %d", off)
+	}
+
+}
