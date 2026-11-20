@@ -274,4 +274,17 @@ func TestLongMessageScrolls(t *testing.T) {
 		t.Fatalf("pgup: offset %d", off)
 	}
 
+	m.focusEnd(true) // G: bottom of the message
+	for range 3 {
+		m.moveMsg(1)
+	}
+	if off := m.reader.YOffset(); off != 25 {
+		t.Fatalf("j at the end jumped: offset %d", off)
+	}
+	m.reader.GotoTop()
+	m.moveMsg(-1)
+	if off := m.reader.YOffset(); off != 0 {
+		t.Fatalf("k at the top: offset %d", off)
+	}
+
 }

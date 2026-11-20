@@ -79,8 +79,11 @@ func (m *Model) moveMsg(d int) {
 			return
 		}
 	}
-	i = clamp(i-d, 0, len(m.openThread.Messages)-1) // newest is shown first
-	m.msgSel = m.openThread.Messages[i].ID
+	j := clamp(i-d, 0, len(m.openThread.Messages)-1) // newest is shown first
+	if j == i {                                      // already at the end of the thread: stay put
+		return
+	}
+	m.msgSel = m.openThread.Messages[j].ID
 	m.scrollToMsg()
 }
 
