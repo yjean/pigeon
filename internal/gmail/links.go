@@ -112,6 +112,7 @@ type Attachment struct {
 	MimeType     string
 	Size         int
 	Inline       bool   // e.g. images embedded in a signature
+	ContentID    string // without <>, what the HTML body references as cid:…
 	attachmentID string // fetched separately
 	data         string // small parts carry their data inline
 }

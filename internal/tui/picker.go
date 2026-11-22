@@ -27,7 +27,16 @@ type picker struct {
 type pickItem struct {
 	link *gmail.Link
 	att  *gmail.Attachment
+	html htmlView // "View as HTML" entries, for the focused message
 }
+
+type htmlView int
+
+const (
+	noHTML htmlView = iota
+	htmlBlocked
+	htmlRemote
+)
 
 type savedMsg struct {
 	path string
@@ -64,7 +73,13 @@ func (m *Model) openPicker() tea.Cmd {
 			}
 		}
 	}
-	items := append(append(atts, links...), inline...)
+	var views []pickItem
+	if len(t.Messages) > 0 {
+		if _, ok := m.focusedMessage().HTMLBody(); ok {
+			views = []pickItem{{html: htmlBlocked}, {html: htmlRemote}}
+		}
+	}
+	items := append(append(append(views, atts...), links...), inline...)
 	if len(items) == 0 {
 		return m.flashMsg("No links or attachments in this conversation", true)
 	}
@@ -105,8 +120,12 @@ func (m *Model) pickerKey(key string) tea.Cmd {
 	return nil
 }
 
-// activate opens a link, or saves (and optionally opens) an attachment.
+// activate opens a link or the HTML view, or saves (and optionally opens) an attachment.
 func (m *Model) activate(it pickItem, open bool) tea.Cmd {
+	if it.html != noHTML {
+		m.picker = nil
+		return m.openHTML(it.html == htmlRemote)
+	}
 	if it.link != nil {
 		u := it.link.URL
 		if strings.HasPrefix(strings.ToLower(u), "mailto:") {
@@ -239,7 +258,11 @@ func (m *Model) renderPicker(w, h int) string {
 			num = strconv.Itoa(i+1) + " "
 		}
 		var icon, main, detail string
-		if it.att != nil {
+		if it.html == htmlBlocked {
+			icon, main, detail = "🌐", "View as HTML", "in the browser · remote images blocked"
+		} else if it.html == htmlRemote {
+			icon, main, detail = "🌐", "View as HTML with remote images", "the sender can see you opened it"
+		} else if it.att != nil {
 			icon, main = "📎", it.att.Filename
 			detail = humanSize(it.att.Size) + " · " + it.att.MimeType
 			if it.att.Inline {
