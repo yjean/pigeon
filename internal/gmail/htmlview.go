@@ -164,7 +164,7 @@ func banner(h PageHeader, allowRemote bool) []*xhtml.Node {
 	if !allowRemote {
 		box.AppendChild(withText(el(atom.Div, "class", "pigeon-note"),
 			"Remote images are blocked (they can tell the sender you opened this). "+
-				"In pigeon: o, then \"View as HTML with remote images\"."))
+				"In pigeon, O opens the message with them."))
 	}
 	return []*xhtml.Node{box}
 }

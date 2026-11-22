@@ -6,11 +6,10 @@ and versions follow [Semantic Versioning](https://semver.org/) (pre-1.0: minor v
 ## [Unreleased]
 
 ### Added
-- View a message as HTML in the browser: `O`, or *View as HTML* in the `o` picker, for the focused
-  message. Scripts, frames and event handlers are stripped and a Content-Security-Policy keeps the
-  page from loading anything remote, so tracking pixels stay silent; *View as HTML with remote
-  images* in `o` lifts that. Inline (`cid:`) images are embedded. The page is written to
-  `~/.cache/pigeon/html/` (0600).
+- View the focused message as HTML in the browser. `O` loads remote images; in the `o` picker,
+  *View as HTML* blocks them through a Content-Security-Policy, so tracking pixels stay silent, and
+  *View as HTML with remote images* matches `O`. Either way scripts, frames and event handlers are
+  stripped and inline (`cid:`) images are embedded. The page is written to `~/.cache/pigeon/html/` (0600).
 - `mise.toml` pins Go 1.26 for building (`mise install`).
 
 ### Changed

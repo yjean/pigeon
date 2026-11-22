@@ -485,8 +485,8 @@ func (m *Model) onKey(key string) tea.Cmd {
 		return m.startSearch()
 	case "o":
 		return m.openPicker()
-	case "O":
-		return m.openHTML(false)
+	case "O": // with remote images: the everyday view; o offers the blocked one
+		return m.openHTML(true)
 	case "c", "r", "a", "f":
 		return m.startCompose(key)
 	case "e":

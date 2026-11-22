@@ -465,7 +465,7 @@ func helpLines() []string {
 		{"  tab / esc", "  next field / close (save draft or discard)"},
 		{"  ctrl+a", "  attach a file (or drop files on the window)"},
 		{"o", "links & attachments: open, save, copy"},
-		{"O", "view the focused message as HTML in the browser"},
+		{"O", "view the focused message as HTML, with images (o: without)"},
 		{"U", "toggle unread only / all conversations"},
 		{"/", "search (Gmail syntax: from: subject: has:attachment …)"},
 		{"  esc", "  leave the search results"},
