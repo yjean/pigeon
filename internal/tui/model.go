@@ -318,6 +318,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case savedMsg:
 		return m, m.onSaved(msg)
 
+	case htmlOpenedMsg:
+		return m, m.onHTMLOpened(msg)
+
 	case sentMsg:
 		return m, m.onSent(msg)
 
@@ -482,6 +485,8 @@ func (m *Model) onKey(key string) tea.Cmd {
 		return m.startSearch()
 	case "o":
 		return m.openPicker()
+	case "O":
+		return m.openHTML(false)
 	case "c", "r", "a", "f":
 		return m.startCompose(key)
 	case "e":

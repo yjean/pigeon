@@ -5,6 +5,14 @@ and versions follow [Semantic Versioning](https://semver.org/) (pre-1.0: minor v
 
 ## [Unreleased]
 
+### Added
+- View a message as HTML in the browser: `O`, or *View as HTML* in the `o` picker, for the focused
+  message. Scripts, frames and event handlers are stripped and a Content-Security-Policy keeps the
+  page from loading anything remote, so tracking pixels stay silent; *View as HTML with remote
+  images* in `o` lifts that. Inline (`cid:`) images are embedded. The page is written to
+  `~/.cache/pigeon/html/` (0600).
+- `mise.toml` pins Go 1.26 for building (`mise install`).
+
 ### Changed
 - Conversations read as an accordion: the newest and unread messages open, the others folded to
   one line (sender, date, snippet). In the reader `j`/`k` move between messages, `enter` expands /

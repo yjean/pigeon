@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"slices"
@@ -287,4 +288,51 @@ func TestLongMessageScrolls(t *testing.T) {
 		t.Fatalf("k at the top: offset %d", off)
 	}
 
+}
+
+func TestPickerOffersHTMLViewForTheFocusedMessage(t *testing.T) {
+	enc := func(s string) string { return base64.URLEncoding.EncodeToString([]byte(s)) }
+	plain := gmail.Message{ID: "p", Payload: gmail.Part{MimeType: "text/plain"}}
+	plain.Payload.Body.Data = enc("see https://example.com/doc")
+	rich := gmail.Message{ID: "h", Payload: gmail.Part{MimeType: "text/html"}}
+	rich.Payload.Body.Data = enc(`<p>see <a href="https://example.com/doc">the doc</a></p>`)
+
+	m := &Model{openThread: &gmail.Thread{ID: "T", Messages: []gmail.Message{plain, rich}}, reader: viewport.New()}
+	m.resetMessages() // focus: the newest, the HTML one
+	if cmd := m.openPicker(); cmd != nil || m.picker == nil {
+		t.Fatalf("picker did not open")
+	}
+	items := m.picker.items
+	if len(items) < 3 || items[0].html != htmlBlocked || items[1].html != htmlRemote || items[2].link == nil {
+		t.Fatalf("items: %+v", items)
+	}
+
+	m.picker = nil
+	m.msgSel = "p" // focus the plain-text message: no HTML view to offer
+	if m.openPicker(); m.picker == nil {
+		t.Fatalf("picker did not open")
+	}
+	for _, it := range m.picker.items {
+		if it.html != noHTML {
+			t.Fatalf("HTML view offered for a plain-text message: %+v", m.picker.items)
+		}
+	}
+}
+
+func TestWriteHTMLPageIsPrivate(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	path, err := writeHTMLPage("18c0ffee", true, "<p>x</p>")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(path) != "18c0ffee-remote.html" {
+		t.Errorf("path %s", path)
+	}
+	fi, err := os.Stat(path)
+	if err != nil || fi.Mode().Perm() != 0o600 {
+		t.Errorf("file mode %v, %v", fi.Mode().Perm(), err)
+	}
+	if di, err := os.Stat(filepath.Dir(path)); err != nil || di.Mode().Perm() != 0o700 {
+		t.Errorf("dir mode %v, %v", di.Mode().Perm(), err)
+	}
 }

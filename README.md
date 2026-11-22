@@ -14,7 +14,7 @@ A fast, keyboard-driven Gmail client for the terminal, inspired by [slk](https:/
 ## Status
 
 - [x] CLI skeleton
-- [x] Add / list / remove Gmail accounts (OAuth 2.0 + PKCE, tokens in macOS Keychain)
+- [x] Add / list / remove Gmail accounts (OAuth 2.0 + PKCE, tokens in the OS keychain: macOS Keychain, Secret Service on Linux)
 - [x] TUI: account rail, thread list, reading pane, status bar
 - [x] Conversations as an accordion: newest and unread messages open, others on one line; focus a message to reply to it
 - [x] Disk cache: instant startup, incremental sync (by thread historyId), prefetch
@@ -25,6 +25,7 @@ A fast, keyboard-driven Gmail client for the terminal, inspired by [slk](https:/
 - [ ] Labels sidebar
 - [x] Search (`/`, Gmail search syntax)
 - [x] Links & attachments picker (`o`): open links, save/open attachments, copy links
+- [x] HTML view (`O`, or *View as HTML* in `o`): opens the message in the browser, scripts stripped, remote images blocked unless asked for
 - [x] Address autocomplete in To/Cc, learned from Sent mail and synced senders
 - [x] Near-instant sync: Gmail history polled every 10 s (≈2 quota units), plus on terminal focus
 
@@ -96,7 +97,8 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
 | `ctrl+a` | attach a file (in compose); dropping files on the terminal also attaches them |
 | `esc` | close compose: save draft, discard, or keep editing |
 | `/` | search with Gmail syntax (`from:` `subject:` `has:attachment` `after:2026/09/01` …); `esc` leaves the results |
-| `o` | links & attachments of the conversation: `enter` open, `s` save to ~/Downloads (or `$PIGEON_DOWNLOAD_DIR`), `y` copy link, `1`–`9` pick |
+| `o` | links & attachments of the conversation, plus *View as HTML* (with or without remote images) for the focused message: `enter` open, `s` save to ~/Downloads (or `$PIGEON_DOWNLOAD_DIR`), `y` copy link, `1`–`9` pick |
+| `O` | view the focused message as HTML in the browser, remote images blocked |
 | `U` | toggle unread only / all conversations (the inbox starts unread-only) |
 | `ctrl+r` | sync now (changes also arrive within ~10 s); drops conversations read meanwhile from the unread view |
 | `?` | help |
@@ -128,4 +130,5 @@ pigeon account remove me@gmail.com # revoke at Google + delete from Keychain
   No Contacts API scope needed.
 - **Cache**: `~/.cache/pigeon/<email>/` (`$XDG_CACHE_HOME` respected), files 0600.
   First paint comes from disk (~1 ms); a sync re-downloads only threads whose `historyId` changed.
+  HTML views (`O`) are written to `~/.cache/pigeon/html/<message id>.html` (0600, directory 0700) and opened from there.
 - Gmail REST is called directly over `net/http` (no heavy generated SDK), so the binary stays small.
